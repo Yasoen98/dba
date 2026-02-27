@@ -3,10 +3,11 @@ import { useGameState } from '../stores/rootStore';
 import { getRankForScore } from '../stores/authSlice';
 
 export const GameOverScreen: React.FC = () => {
-    const { winner, playerRoster, opponentRoster, turnNumber, playerScore, resetGame } = useGameState();
+    // FIX #2: pobieramy lastBattlePoints ze store zamiast hardkodować 50
+    const { winner, playerRoster, opponentRoster, turnNumber, playerScore, resetGame, lastBattlePoints } = useGameState();
 
     const isVictory = winner === 'player';
-    const pointsEarned = isVictory ? 50 : 0;
+    const pointsEarned = lastBattlePoints; // FIX #2: realna wartość punktów
     const newScore = playerScore;
 
     const playerSurvivors = playerRoster.filter(c => c.currentHp > 0).length;
@@ -67,10 +68,11 @@ export const GameOverScreen: React.FC = () => {
                         value={`${playerSurvivors} vs ${opponentSurvivors}`}
                         color={isVictory ? 'var(--ki-color)' : 'var(--physical-color)'}
                     />
+                    {/* FIX #2: pokazuje realne punkty (mogą być ujemne przy przegranej) */}
                     <StatCard
-                        label="Points Earned"
-                        value={pointsEarned > 0 ? `+${pointsEarned}` : '0'}
-                        color={pointsEarned > 0 ? '#22c55e' : 'var(--text-muted)'}
+                        label="Points"
+                        value={pointsEarned > 0 ? `+${pointsEarned}` : String(pointsEarned)}
+                        color={pointsEarned > 0 ? '#22c55e' : pointsEarned === 0 ? 'var(--text-muted)' : 'var(--physical-color)'}
                     />
                 </div>
 
@@ -120,7 +122,6 @@ export const GameOverScreen: React.FC = () => {
                         }}
                         onClick={() => {
                             resetGame();
-                            // Small delay to ensure state is reset before starting matchmaking
                             setTimeout(() => useGameState.getState().startMatchmaking(), 50);
                         }}
                     >
@@ -155,32 +156,30 @@ const RosterSummary: React.FC<{
         <div style={{
             fontSize: '0.75rem',
             color: isPlayer ? 'var(--ki-color)' : 'var(--physical-color)',
-            fontWeight: 700,
             marginBottom: '0.5rem',
+            fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '1px',
         }}>
             {label}
         </div>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
-            {roster.map(c => {
-                const alive = c.currentHp > 0;
-                return (
-                    <div key={c.name} style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '50%',
-                        backgroundImage: c.portraitUrl ? `url(${c.portraitUrl})` : 'none',
-                        backgroundColor: c.imageColor,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        border: `2px solid ${alive ? (isPlayer ? 'var(--ki-color)' : 'var(--physical-color)') : 'rgba(255,255,255,0.1)'}`,
-                        opacity: alive ? 1 : 0.3,
-                        filter: alive ? 'none' : 'grayscale(1)',
-                        transition: 'all 0.3s',
-                    }} title={c.name} />
-                );
-            })}
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+            {roster.map((c) => (
+                <div key={c.name} style={{ textAlign: 'center' }}>
+                    <div style={{
+                        width: 44, height: 44, borderRadius: '8px',
+                        overflow: 'hidden',
+                        border: `2px solid ${c.currentHp > 0 ? c.imageColor : '#444'}`,
+                        opacity: c.currentHp > 0 ? 1 : 0.4,
+                        marginBottom: '0.2rem',
+                    }}>
+                        <img src={c.portraitUrl} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div style={{ fontSize: '0.6rem', color: c.currentHp > 0 ? '#e2e8f0' : '#555' }}>
+                        {c.currentHp > 0 ? `${c.currentHp}/${c.maxHp}` : 'KO'}
+                    </div>
+                </div>
+            ))}
         </div>
     </div>
 );

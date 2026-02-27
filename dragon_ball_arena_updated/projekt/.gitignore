@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# FIX #4: ignoruj pliki backup — nie powinny być w repo
+*.bak
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

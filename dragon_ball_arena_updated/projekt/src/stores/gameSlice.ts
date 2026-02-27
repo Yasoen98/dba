@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { RootState } from './rootStore';
+import { INITIAL_CHARACTERS } from '../data/characters'; // FIX #3
 
 export type GamePhase = 'login' | 'menu' | 'matchmaking' | 'draft' | 'battle' | 'gameOver';
 
@@ -35,12 +36,11 @@ export const createGameSlice: StateCreator<RootState, [], [], GameSlice> = (set,
     },
 
     resetGame: () => {
-        // Reset draft and battle state, return to menu
         set({
             phase: 'menu',
             playerRoster: [],
             opponentRoster: [],
-            availableCharacters: [],
+            availableCharacters: [...INITIAL_CHARACTERS], // FIX #3: było []
             draftTurn: 'player',
             draftTierUsed: 0,
             opponentTierUsed: 0,
@@ -52,6 +52,7 @@ export const createGameSlice: StateCreator<RootState, [], [], GameSlice> = (set,
             isPlayerTurn: true,
             combatLogs: [],
             winner: null,
+            lastBattlePoints: 0,
         });
     },
 });

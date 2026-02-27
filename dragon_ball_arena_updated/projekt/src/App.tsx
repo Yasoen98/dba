@@ -4,6 +4,7 @@ import { DraftScreen } from './components/DraftScreen';
 import { BattleArena } from './components/BattleArena';
 import { LoginScreen } from './components/LoginScreen';
 import { GameOverScreen } from './components/GameOverScreen';
+import { INITIAL_CHARACTERS } from './data/characters'; // FIX #5
 import './index.css';
 
 function App() {
@@ -72,11 +73,11 @@ function App() {
                             <div className="menu-logo-divider" />
                         </div>
 
-                        {/* Stats grid */}
+                        {/* Stats grid — FIX #5: dynamiczna liczba fighterów */}
                         <div className="menu-stats-grid">
                             <div className="menu-stat-card">
                                 <span className="menu-stat-icon">⚔</span>
-                                <span className="menu-stat-value">30</span>
+                                <span className="menu-stat-value">{INITIAL_CHARACTERS.length}</span>
                                 <span className="menu-stat-label">Fighters</span>
                             </div>
                             <div className="menu-stat-card">

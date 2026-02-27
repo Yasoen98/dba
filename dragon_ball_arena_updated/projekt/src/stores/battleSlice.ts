@@ -18,6 +18,7 @@ interface BattleSliceState {
     combatLogs: CombatLogEntry[];
     winner: 'player' | 'opponent' | null;
     playerActionsUsed: Record<number, boolean>;
+    lastBattlePoints: number; // FIX #2: trzyma realne punkty do wyświetlenia na GameOverScreen
 }
 
 export interface BattleSlice extends BattleSliceState {
@@ -28,10 +29,12 @@ export interface BattleSlice extends BattleSliceState {
     passTurn: () => void;
     executeOpponentTurn: () => void;
     endTurn: () => void;
-    surrender: () => void;                // player can concede
+    surrender: () => void;
 }
 
 const initialEnergy: PlayerEnergy = { ki: 0, physical: 0, special: 0, universal: 0 };
+
+// ─── Energy helpers ────────────────────────────────────────────────────────────
 
 function canAffordCost(energy: PlayerEnergy, cost: ActionCost): boolean {
     const needKi = cost.ki || 0;
@@ -44,25 +47,35 @@ function canAffordCost(energy: PlayerEnergy, cost: ActionCost): boolean {
     let availSp = energy.special;
     let availUniversal = energy.universal || 0;
 
-    // Try to satisfy each specific requirement, using universal as fallback
+    // First, fulfill specific energy requirements using universal as fallback
     if (availKi < needKi) {
         const shortfall = needKi - availKi;
         if (availUniversal < shortfall) return false;
         availUniversal -= shortfall;
+        availKi = 0;
+    } else {
+        availKi -= needKi;
     }
     if (availPh < needPh) {
         const shortfall = needPh - availPh;
         if (availUniversal < shortfall) return false;
         availUniversal -= shortfall;
+        availPh = 0;
+    } else {
+        availPh -= needPh;
     }
     if (availSp < needSp) {
         const shortfall = needSp - availSp;
         if (availUniversal < shortfall) return false;
         availUniversal -= shortfall;
+        availSp = 0;
+    } else {
+        availSp -= needSp;
     }
 
-    // Check if remaining universal covers 'any' cost
-    if (needAny > availUniversal) return false;
+    // For `any` cost, check if we have enough from remaining energies (any type)
+    const availableForAny = availKi + availPh + availSp + availUniversal;
+    if (availableForAny < needAny) return false;
 
     return true;
 }
@@ -78,72 +91,88 @@ function deductCost(energy: PlayerEnergy, cost: ActionCost): PlayerEnergy {
     const needSp = cost.special || 0;
     const needAny = cost.any || 0;
 
-    // Deduct specific energies, using universal as fallback
+    // Deduct specific energies first
     if (ki < needKi) {
-        const shortfall = needKi - ki;
-        universal -= shortfall;
+        universal -= (needKi - ki);
         ki = 0;
     } else {
         ki -= needKi;
     }
-
     if (physical < needPh) {
-        const shortfall = needPh - physical;
-        universal -= shortfall;
+        universal -= (needPh - physical);
         physical = 0;
     } else {
         physical -= needPh;
     }
-
     if (special < needSp) {
-        const shortfall = needSp - special;
-        universal -= shortfall;
+        universal -= (needSp - special);
         special = 0;
     } else {
         special -= needSp;
     }
 
-    // Deduct 'any' cost from universal
-    universal -= needAny;
+    // For `any` cost, use any available energy in order: ki, physical, special, universal
+    let remainingAny = needAny;
+    if (remainingAny > 0 && ki > 0) {
+        const use = Math.min(remainingAny, ki);
+        ki -= use;
+        remainingAny -= use;
+    }
+    if (remainingAny > 0 && physical > 0) {
+        const use = Math.min(remainingAny, physical);
+        physical -= use;
+        remainingAny -= use;
+    }
+    if (remainingAny > 0 && special > 0) {
+        const use = Math.min(remainingAny, special);
+        special -= use;
+        remainingAny -= use;
+    }
+    if (remainingAny > 0) {
+        universal -= remainingAny;
+    }
 
     return { ki, physical, special, universal };
 }
 
+// ─── Damage calculation ────────────────────────────────────────────────────────
+
 function calcDamage(baseDamage: number, attackerAtk: number, defenderDef: number, effect: EffectType): number {
-    // Apply pierce (ignore defense)
-    let dmg = effect === 'pierce' ? baseDamage : Math.floor(baseDamage * (attackerAtk / defenderDef));
-    return dmg;
+    return effect === 'pierce' ? baseDamage : Math.floor(baseDamage * (attackerAtk / defenderDef));
 }
 
 function computeDamage(attacker: BattleCharacter, defender: BattleCharacter, baseDamage: number, effect: EffectType): number {
     let dmg = calcDamage(baseDamage, attacker.stats.attack, defender.stats.defense, effect);
-    // Check for senzu/buff on attacker
     if (attacker.statusEffects.some(se => se.effect === 'senzu' || se.effect === 'buff')) {
         dmg = Math.floor(dmg * 1.15);
     }
     return dmg;
 }
 
+// ─── Status helpers ────────────────────────────────────────────────────────────
+
 function isStunned(char: BattleCharacter): boolean {
     return char.statusEffects.some(e => e.effect === 'stun');
 }
 
-// Calculate points delta for the player when a battle ends.
-// Rewards surviving player characters and gives bonus for how many opponents were defeated.
-// If the player loses, returns a negative value (penalty) that scales with how many opponents remain alive.
-function calculateBattlePoints(playerRoster: BattleCharacter[], opponentRoster: BattleCharacter[], winner: 'player'|'opponent'): number {
+function isDodging(char: BattleCharacter): boolean {
+    return char.statusEffects.some(e => e.effect === 'dodging');
+}
+
+// ─── Points calculation ────────────────────────────────────────────────────────
+
+function calculateBattlePoints(
+    playerRoster: BattleCharacter[],
+    opponentRoster: BattleCharacter[],
+    winner: 'player' | 'opponent',
+): number {
     const playerAlive = playerRoster.filter(c => c.currentHp > 0).length;
     const opponentAlive = opponentRoster.filter(c => c.currentHp > 0).length;
     const killedOpponents = opponentRoster.length - opponentAlive;
 
     if (winner === 'player') {
-        const baseWin = 50;
-        const surviveBonus = playerAlive * 30; // reward living characters
-        const mopUpBonus = killedOpponents * 20; // bonus for how many enemies you defeated
-        return baseWin + surviveBonus + mopUpBonus;
+        return 50 + playerAlive * 30 + killedOpponents * 20;
     } else {
-        // Player lost: penalize more when opponent has more survivors;
-        // still give small consolation for enemies you managed to take down.
         const basePenalty = 40;
         const opponentSurvivePenalty = opponentAlive * 30;
         const consolation = killedOpponents * 10;
@@ -151,15 +180,12 @@ function calculateBattlePoints(playerRoster: BattleCharacter[], opponentRoster: 
     }
 }
 
-function isDodging(char: BattleCharacter): boolean {
-    return char.statusEffects.some(e => e.effect === 'dodging');
-}
+// ─── Per-turn effect processing ────────────────────────────────────────────────
 
 function decrementEffects(char: BattleCharacter): BattleCharacter {
     let updated = { ...char };
     const appliedEffects: typeof char.statusEffects = [];
 
-    // Apply per-turn effects before decrementing durations
     for (const e of char.statusEffects) {
         if (e.effect === 'poison') {
             const dmg = Math.max(1, Math.floor(char.maxHp * 0.05));
@@ -171,7 +197,6 @@ function decrementEffects(char: BattleCharacter): BattleCharacter {
             const heal = Math.max(1, Math.floor(char.maxHp * 0.06));
             updated = { ...updated, currentHp: Math.min(updated.maxHp, updated.currentHp + heal) };
         }
-        // keep effect for duration decrement pass
         appliedEffects.push({ ...e });
     }
 
@@ -195,7 +220,6 @@ function grantEnergy(energy: PlayerEnergy, aliveCount: number): PlayerEnergy {
     let total = newEnergy.ki + newEnergy.physical + newEnergy.special + newEnergy.universal;
     for (let i = 0; i < aliveCount; i++) {
         if (total >= 10) break;
-        // Weighted distribution: ki 35%, physical 30%, special 25%, universal 10%
         const roll = Math.random();
         if (roll < 0.35) newEnergy.ki++;
         else if (roll < 0.65) newEnergy.physical++;
@@ -206,23 +230,14 @@ function grantEnergy(energy: PlayerEnergy, aliveCount: number): PlayerEnergy {
     return newEnergy;
 }
 
-/**
- * Improved bot AI for battle:
- * - Targets the player's character with the lowest HP
- * - Prefers high-damage techniques
- * - Uses pierce against low-HP targets
- * - Uses stun when player has high HP (to delay)
- * - Avoids wasting energy on pass when it can act
- */
+// ─── Bot AI ────────────────────────────────────────────────────────────────────
+
 function chooseBotAction(
     botChar: BattleCharacter,
     playerChar: BattleCharacter,
     energy: PlayerEnergy,
 ): { type: 'technique' | 'pass'; techId?: string } {
-    // Check if stunned — must pass
-    if (isStunned(botChar)) {
-        return { type: 'pass' };
-    }
+    if (isStunned(botChar)) return { type: 'pass' };
 
     const affordable = botChar.techniques.filter(t => {
         const cd = botChar.cooldowns[t.id] || 0;
@@ -231,29 +246,88 @@ function chooseBotAction(
 
     if (affordable.length === 0) return { type: 'pass' };
 
-    const playerHpPercent = playerChar.currentHp / playerChar.maxHp;
+    const botHpRatio   = botChar.currentHp / botChar.maxHp;
+    const enemyHpRatio = playerChar.currentHp / playerChar.maxHp;
+    const totalEnergy  = energy.ki + energy.physical + energy.special + (energy.universal || 0);
 
-    // If player is low HP, prefer pierce to finish them off
-    if (playerHpPercent < 0.3) {
-        const piercing = affordable.filter(t => t.effect === 'pierce');
-        if (piercing.length > 0) {
-            const best = piercing.sort((a, b) => b.damage - a.damage)[0];
-            return { type: 'technique', techId: best.id };
-        }
+    // Heal self if critically low HP
+    if (botHpRatio < 0.25) {
+        const heal = affordable.find(t => t.effect === 'heal');
+        if (heal) return { type: 'technique', techId: heal.id };
+        const drain = affordable.find(t => t.effect === 'drain');
+        if (drain) return { type: 'technique', techId: drain.id };
+        const regen = affordable.find(t => t.effect === 'regen');
+        if (regen) return { type: 'technique', techId: regen.id };
     }
 
-    // If player is high HP, prefer stun to delay
-    if (playerHpPercent > 0.7) {
-        const stunners = affordable.filter(t => t.effect === 'stun');
-        if (stunners.length > 0) {
-            return { type: 'technique', techId: stunners[0].id };
-        }
+    // Clear debuffs if heavily afflicted
+    const negEffects = botChar.statusEffects.filter(e =>
+        ['poison', 'bleed', 'weaken'].includes(e.effect),
+    ).length;
+    if (negEffects >= 2) {
+        const clearMove = affordable.find(t => t.effect === 'clear');
+        if (clearMove) return { type: 'technique', techId: clearMove.id };
     }
 
-    // Otherwise pick highest damage available
-    const best = affordable.sort((a, b) => b.damage - a.damage)[0];
+    // Energy boost if nearly empty
+    if (totalEnergy <= 1) {
+        const energyMove = affordable.find(t => t.effect === 'energy');
+        if (energyMove) return { type: 'technique', techId: energyMove.id };
+    }
+
+    // Regen if moderate HP loss
+    if (botHpRatio < 0.55 && !botChar.statusEffects.some(e => e.effect === 'regen')) {
+        const regen = affordable.find(t => t.effect === 'regen');
+        if (regen) return { type: 'technique', techId: regen.id };
+    }
+
+    // Drain when HP not full
+    if (botHpRatio < 0.70) {
+        const drain = affordable.find(t => t.effect === 'drain');
+        if (drain && Math.random() < 0.65) return { type: 'technique', techId: drain.id };
+    }
+
+    // Senzu boost before a big attack
+    const senzuMove  = affordable.find(t => t.effect === 'senzu');
+    const hasBigMove = affordable.some(t => t.damage > 150 && t.effect !== 'senzu');
+    if (senzuMove && hasBigMove && !botChar.statusEffects.some(e => e.effect === 'senzu')) {
+        return { type: 'technique', techId: senzuMove.id };
+    }
+
+    // Pierce on low-HP enemies
+    if (enemyHpRatio < 0.35) {
+        const pierce = affordable.find(t => t.effect === 'pierce');
+        if (pierce) return { type: 'technique', techId: pierce.id };
+    }
+
+    // Stun when enemy is healthy
+    if (enemyHpRatio > 0.6) {
+        const stun = affordable.find(t => t.effect === 'stun');
+        if (stun) return { type: 'technique', techId: stun.id };
+    }
+
+    // Apply DoT if not already active
+    if (!playerChar.statusEffects.some(e => e.effect === 'poison')) {
+        const poison = affordable.find(t => t.effect === 'poison');
+        if (poison) return { type: 'technique', techId: poison.id };
+    }
+    if (!playerChar.statusEffects.some(e => e.effect === 'bleed')) {
+        const bleed = affordable.find(t => t.effect === 'bleed');
+        if (bleed && Math.random() < 0.55) return { type: 'technique', techId: bleed.id };
+    }
+
+    // Weaken enemy
+    if (!playerChar.statusEffects.some(e => e.effect === 'weaken') && enemyHpRatio > 0.45) {
+        const weaken = affordable.find(t => t.effect === 'weaken');
+        if (weaken && Math.random() < 0.50) return { type: 'technique', techId: weaken.id };
+    }
+
+    // Default: highest damage
+    const best = [...affordable].sort((a, b) => b.damage - a.damage)[0];
     return { type: 'technique', techId: best.id };
 }
+
+// ─── Slice ────────────────────────────────────────────────────────────────────
 
 export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (set, get) => ({
     playerActiveIndex: 0,
@@ -265,30 +339,19 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
     combatLogs: [],
     winner: null,
     playerActionsUsed: {},
+    lastBattlePoints: 0, // FIX #2: dodane pole
 
-    setPlayerActiveIndex: (index: number) => {
-        const state = get();
-        if (state.phase === 'battle' && state.playerRoster[index]?.currentHp > 0) {
-            set({ playerActiveIndex: index });
-        }
-    },
-
-    setOpponentActiveIndex: (index: number) => {
-        const state = get();
-        if (state.phase === 'battle' && state.opponentRoster[index]?.currentHp > 0) {
-            set({ opponentActiveIndex: index });
-        }
-    },
+    setPlayerActiveIndex: (index) => set({ playerActiveIndex: index }),
+    setOpponentActiveIndex: (index) => set({ opponentActiveIndex: index }),
 
     startBattle: () => {
-        const types = ['ki', 'physical', 'special', 'universal'] as const;
         const pe = { ...initialEnergy };
         const oe = { ...initialEnergy };
+        const types = ['ki', 'physical', 'special'] as const;
         for (let i = 0; i < 3; i++) {
-            pe[types[Math.floor(Math.random() * 4)]]++;
-            oe[types[Math.floor(Math.random() * 4)]]++;
+            pe[types[Math.floor(Math.random() * 3)]]++;
+            oe[types[Math.floor(Math.random() * 3)]]++;
         }
-
         set({
             phase: 'battle',
             playerActiveIndex: 0,
@@ -307,6 +370,7 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 isOpponent: false,
             }],
             playerActionsUsed: {},
+            lastBattlePoints: 0,
         });
     },
 
@@ -317,7 +381,7 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         const activeChar = state.playerRoster[state.playerActiveIndex];
         const oppChar = state.opponentRoster[state.opponentActiveIndex];
 
-        // Check if player's character is stunned
+        // Stunned check
         if (isStunned(activeChar)) {
             const stunnedLog: CombatLogEntry = {
                 id: Date.now(),
@@ -328,11 +392,14 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 details: `${activeChar.name} is stunned and cannot act!`,
                 isOpponent: false,
             };
-            set({ combatLogs: [stunnedLog, ...state.combatLogs], playerActionsUsed: { ...state.playerActionsUsed, [state.playerActiveIndex]: true } });
+            set({
+                combatLogs: [stunnedLog, ...state.combatLogs],
+                playerActionsUsed: { ...state.playerActionsUsed, [state.playerActiveIndex]: true },
+            });
             return;
         }
 
-        // Prevent multiple actions by same character in one round
+        // One action per character per round
         if (state.playerActionsUsed[state.playerActiveIndex]) return;
 
         let energyCost: ActionCost = {};
@@ -354,7 +421,7 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             cooldown = tech.cooldown;
             effectDuration = tech.effectDuration ?? 1;
         } else if (actionType === 'dodge') {
-            if (activeChar.dodge.name !== actionId) return;
+            // FIX #4: usunięto fragile check na dodge.name – identyfikujemy po stałym kluczu 'dodge'
             if ((activeChar.cooldowns['dodge'] || 0) > 0) return;
 
             energyCost = activeChar.dodge.cost;
@@ -366,10 +433,10 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
 
         let pe = deductCost(state.playerEnergy, energyCost);
 
-        // Apply cooldown to active character
+        // Apply cooldown using stable key
+        const cdKey = actionType === 'dodge' ? 'dodge' : actionId;
         const newPlayerRoster = state.playerRoster.map((c, i) => {
             if (i !== state.playerActiveIndex) return c;
-            const cdKey = actionType === 'dodge' ? 'dodge' : actionId;
             return { ...c, cooldowns: { ...c.cooldowns, [cdKey]: cooldown } };
         });
 
@@ -378,21 +445,24 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         let logDetail = `${activeChar.name} used ${actionName}.`;
 
         if (actionType === 'technique') {
-            // AoE: apply to all opponents
             if (effect === 'aoe') {
                 let totalDeals = 0;
                 newOppRoster = newOppRoster.map((tar) => {
                     if (tar.currentHp <= 0) return tar;
                     const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], tar, damage, 'none');
-                    const newHp = Math.max(0, tar.currentHp - actualDamage);
                     totalDeals += actualDamage;
-                    return { ...tar, currentHp: newHp };
+                    return { ...tar, currentHp: Math.max(0, tar.currentHp - actualDamage) };
                 });
                 logDetail += ` Deals ${totalDeals} total damage to all opponents!`;
             } else if (effect === 'heal') {
-                // heal target (self or ally) — here heal active player char
                 const healAmt = Math.max(1, Math.floor(newPlayerRoster[state.playerActiveIndex].maxHp * 0.25));
-                newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], currentHp: Math.min(newPlayerRoster[state.playerActiveIndex].maxHp, newPlayerRoster[state.playerActiveIndex].currentHp + healAmt) };
+                newPlayerRoster[state.playerActiveIndex] = {
+                    ...newPlayerRoster[state.playerActiveIndex],
+                    currentHp: Math.min(
+                        newPlayerRoster[state.playerActiveIndex].maxHp,
+                        newPlayerRoster[state.playerActiveIndex].currentHp + healAmt,
+                    ),
+                };
                 logDetail += ` Heals ${newPlayerRoster[state.playerActiveIndex].name} for ${healAmt} HP.`;
             } else if (effect === 'healAll') {
                 newPlayerRoster.forEach((pc, idx) => {
@@ -402,51 +472,62 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 });
                 logDetail += ` Heals all allies.`;
             } else if (effect === 'clear') {
-                // remove negative effects from opponent target
-                newOppChar.statusEffects = newOppChar.statusEffects.filter(se => !['poison','bleed','weaken','stun'].includes(se.effect));
-                logDetail += ` Cleared negative effects on ${newOppChar.name}.`;
+                const before = newPlayerRoster[state.playerActiveIndex].statusEffects.length;
+                newPlayerRoster[state.playerActiveIndex] = {
+                    ...newPlayerRoster[state.playerActiveIndex],
+                    statusEffects: newPlayerRoster[state.playerActiveIndex].statusEffects.filter(
+                        se => !['poison', 'bleed', 'weaken', 'stun'].includes(se.effect),
+                    ),
+                };
+                const after = newPlayerRoster[state.playerActiveIndex].statusEffects.length;
+                const cleared = before - after;
+                logDetail += cleared > 0
+                    ? ` ${newPlayerRoster[state.playerActiveIndex].name} cleared ${cleared} negative effect(s)!`
+                    : ` ${newPlayerRoster[state.playerActiveIndex].name} has nothing to clear.`;
             } else if (effect === 'senzu') {
-                // grant damage buff to self
-                newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], statusEffects: [...newPlayerRoster[state.playerActiveIndex].statusEffects, { effect: 'senzu', duration: effectDuration }] };
+                newPlayerRoster[state.playerActiveIndex] = {
+                    ...newPlayerRoster[state.playerActiveIndex],
+                    statusEffects: [
+                        ...newPlayerRoster[state.playerActiveIndex].statusEffects,
+                        { effect: 'senzu', duration: effectDuration },
+                    ],
+                };
                 logDetail += ` ${newPlayerRoster[state.playerActiveIndex].name} gains a damage boost.`;
             } else if (effect === 'energy') {
-                // small energy boost to player
                 pe = { ...pe, universal: (pe.universal || 0) + 2 };
                 logDetail += ` Grants energy boost.`;
             } else if (effect === 'drain') {
                 const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], newOppChar, damage, 'none');
                 newOppChar.currentHp = Math.max(0, newOppChar.currentHp - actualDamage);
-                // heal attacker for portion
                 const heal = Math.floor(actualDamage * 0.5);
-                newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], currentHp: Math.min(newPlayerRoster[state.playerActiveIndex].maxHp, newPlayerRoster[state.playerActiveIndex].currentHp + heal) };
+                newPlayerRoster[state.playerActiveIndex] = {
+                    ...newPlayerRoster[state.playerActiveIndex],
+                    currentHp: Math.min(
+                        newPlayerRoster[state.playerActiveIndex].maxHp,
+                        newPlayerRoster[state.playerActiveIndex].currentHp + heal,
+                    ),
+                };
                 logDetail += ` Deals ${actualDamage} damage and drains ${heal} HP.`;
             } else {
-                // default: single-target damage and possible status effects
                 const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], newOppChar, damage, effect);
                 newOppChar.currentHp = Math.max(0, newOppChar.currentHp - actualDamage);
                 logDetail += ` Deals ${actualDamage} damage!`;
 
-                if (['weaken','stun','poison','bleed','regen'].includes(effect)) {
-                    newOppChar.statusEffects = [
-                        ...newOppChar.statusEffects,
-                        { effect, duration: effectDuration },
-                    ];
-                    logDetail += effect === 'stun'
-                        ? ` ${newOppChar.name} is STUNNED for ${effectDuration} turn(s)!`
-                        : effect === 'weaken'
-                            ? ` ${newOppChar.name} is weakened!`
-                            : effect === 'poison'
-                                ? ` ${newOppChar.name} is POISONED!`
-                                : effect === 'bleed'
-                                    ? ` ${newOppChar.name} is BLEEDING!`
-                                    : effect === 'regen'
-                                        ? ` ${newOppChar.name} will regenerate HP.`
-                                        : '';
+                if (['weaken', 'stun', 'poison', 'bleed', 'regen', 'buff'].includes(effect)) {
+                    newOppChar.statusEffects = [...newOppChar.statusEffects, { effect, duration: effectDuration }];
+                    logDetail += effect === 'stun'   ? ` ${newOppChar.name} is STUNNED for ${effectDuration} turn(s)!`
+                        : effect === 'weaken'        ? ` ${newOppChar.name} is WEAKENED for ${effectDuration} turn(s)!`
+                        : effect === 'poison'        ? ` ${newOppChar.name} is POISONED for ${effectDuration} turn(s)!`
+                        : effect === 'bleed'         ? ` ${newOppChar.name} is BLEEDING for ${effectDuration} turn(s)!`
+                        : effect === 'buff'          ? ` ${newOppChar.name} is BUFFED!`
+                        : ` ${newOppChar.name} will regenerate HP.`;
                 }
             }
-        } else {
-            // Dodge: mark character as actively dodging
-            logDetail += ` ${activeChar.name} prepares to dodge!`;
+
+            newOppRoster[state.opponentActiveIndex] = newOppChar;
+
+        } else if (actionType === 'dodge') {
+            // Apply dodging status to this character for the opponent's next attack
             newPlayerRoster[state.playerActiveIndex] = {
                 ...newPlayerRoster[state.playerActiveIndex],
                 statusEffects: [
@@ -454,9 +535,8 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                     { effect: 'dodging', duration: 1 },
                 ],
             };
+            logDetail += ` ${activeChar.name} prepares to dodge (${Math.round(activeChar.dodge.successRate * 100)}% chance).`;
         }
-
-        newOppRoster[state.opponentActiveIndex] = newOppChar;
 
         const newLog: CombatLogEntry = {
             id: Date.now(),
@@ -468,21 +548,21 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             isOpponent: false,
         };
 
+        const newActionsUsed = { ...state.playerActionsUsed, [state.playerActiveIndex]: true };
         set({
             playerEnergy: pe,
             playerRoster: newPlayerRoster,
             opponentRoster: newOppRoster,
             combatLogs: [newLog, ...state.combatLogs],
-            playerActionsUsed: { ...state.playerActionsUsed, [state.playerActiveIndex]: true },
+            playerActionsUsed: newActionsUsed,
         });
 
         // Check opponent defeat
         if (newOppChar.currentHp <= 0) {
             const nextOppIndex = newOppRoster.findIndex(c => c.currentHp > 0);
             if (nextOppIndex === -1) {
-                set({ winner: 'player', phase: 'gameOver' });
-                // calculate points based on surviving characters and defeated opponents
-                const pts = calculateBattlePoints(state.playerRoster, newOppRoster, 'player');
+                const pts = calculateBattlePoints(newPlayerRoster, newOppRoster, 'player');
+                set({ winner: 'player', phase: 'gameOver', lastBattlePoints: pts }); // FIX #2
                 get().addScore(pts);
                 return;
             } else {
@@ -500,20 +580,16 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 }));
             }
         }
-
-        // do not auto-end the whole round: player may act with other characters
     },
 
     passTurn: () => {
         const state = get();
         if (!state.isPlayerTurn || state.phase !== 'battle' || state.winner) return;
 
-        // Mark ALL remaining characters (alive and haven't acted) as passed
         const updatedActionsUsed = { ...state.playerActionsUsed };
         const newLogs: CombatLogEntry[] = [];
-        
+
         state.playerRoster.forEach((char, index) => {
-            // Only pass characters that are alive and haven't acted yet
             if (char.currentHp > 0 && !updatedActionsUsed[index]) {
                 updatedActionsUsed[index] = true;
                 newLogs.push({
@@ -528,13 +604,11 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             }
         });
 
-        // Update state with all characters passed and all new logs
         set({
             combatLogs: [...newLogs, ...state.combatLogs],
             playerActionsUsed: updatedActionsUsed,
         });
 
-        // Immediately end the round since all characters have now acted/passed
         get().endTurn();
     },
 
@@ -570,49 +644,48 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
 
             actionName = action.name;
 
-            // Check if player is dodging
+            // Check player dodge
             if (isDodging(updatedPlayerChar) && Math.random() < updatedPlayerChar.dodge.successRate) {
                 logDetail = `${botChar.name} used ${actionName} but ${updatedPlayerChar.name} dodged it!`;
-                // Remove dodge status after use
                 updatedPlayerChar = {
                     ...updatedPlayerChar,
                     statusEffects: updatedPlayerChar.statusEffects.filter(e => e.effect !== 'dodging'),
                 };
             } else {
-                // Handle various effects: damage, poison/bleed/regeneration, heal, drain
                 if (action.effect === 'heal') {
-                    // heal self
                     const healAmt = Math.max(1, Math.floor(botChar.maxHp * 0.25));
-                    newOppRoster[state.opponentActiveIndex] = { ...botChar, currentHp: Math.min(botChar.maxHp, botChar.currentHp + healAmt) };
+                    newOppRoster[state.opponentActiveIndex] = {
+                        ...newOppRoster[state.opponentActiveIndex],
+                        currentHp: Math.min(botChar.maxHp, botChar.currentHp + healAmt),
+                    };
                     logDetail = `${botChar.name} used ${actionName}. Heals for ${healAmt} HP!`;
                 } else if (action.effect === 'drain') {
                     const actualDamage = computeDamage(botChar, updatedPlayerChar, action.damage, 'none');
                     updatedPlayerChar.currentHp = Math.max(0, updatedPlayerChar.currentHp - actualDamage);
                     const heal = Math.floor(actualDamage * 0.5);
-                    newOppRoster[state.opponentActiveIndex] = { ...botChar, currentHp: Math.min(botChar.maxHp, botChar.currentHp + heal) };
+                    newOppRoster[state.opponentActiveIndex] = {
+                        ...newOppRoster[state.opponentActiveIndex],
+                        currentHp: Math.min(botChar.maxHp, botChar.currentHp + heal),
+                    };
                     logDetail = `${botChar.name} used ${actionName}. Deals ${actualDamage} damage and drains ${heal} HP!`;
                 } else {
                     const actualDamage = computeDamage(botChar, updatedPlayerChar, action.damage, action.effect);
                     updatedPlayerChar.currentHp = Math.max(0, updatedPlayerChar.currentHp - actualDamage);
                     logDetail = `${botChar.name} used ${actionName}. Deals ${actualDamage} damage!`;
 
-                    if (['stun','weaken','poison','bleed','regen','senzu'].includes(action.effect)) {
+                    if (['stun', 'weaken', 'poison', 'bleed', 'regen', 'senzu', 'buff'].includes(action.effect)) {
                         const dur = action.effectDuration ?? 1;
                         updatedPlayerChar.statusEffects = [
                             ...updatedPlayerChar.statusEffects,
                             { effect: action.effect as EffectType, duration: dur },
                         ];
-                        logDetail += action.effect === 'stun'
-                            ? ` ${updatedPlayerChar.name} is STUNNED for ${dur} turn(s)!`
-                            : action.effect === 'weaken'
-                                ? ` ${updatedPlayerChar.name} is weakened!`
-                                : action.effect === 'poison'
-                                    ? ` ${updatedPlayerChar.name} is POISONED!`
-                                    : action.effect === 'bleed'
-                                        ? ` ${updatedPlayerChar.name} is BLEEDING!`
-                                        : action.effect === 'regen'
-                                            ? ` ${updatedPlayerChar.name} will regenerate HP.`
-                                            : ` ${updatedPlayerChar.name} affected.`;
+                        logDetail += action.effect === 'stun'   ? ` ${updatedPlayerChar.name} is STUNNED for ${dur} turn(s)!`
+                            : action.effect === 'weaken'        ? ` ${updatedPlayerChar.name} is WEAKENED!`
+                            : action.effect === 'poison'        ? ` ${updatedPlayerChar.name} is POISONED!`
+                            : action.effect === 'bleed'         ? ` ${updatedPlayerChar.name} is BLEEDING!`
+                            : action.effect === 'regen'         ? ` ${updatedPlayerChar.name} will regenerate HP.`
+                            : action.effect === 'buff'          ? ` ${updatedPlayerChar.name} is BUFFED!`
+                            : ` ${updatedPlayerChar.name} affected.`;
                     }
                 }
             }
@@ -641,8 +714,8 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         if (updatedPlayerChar.currentHp <= 0) {
             const nextPlayerIndex = newPlayerRoster.findIndex(c => c.currentHp > 0);
             if (nextPlayerIndex === -1) {
-                set({ winner: 'opponent', phase: 'gameOver' });
                 const pts = calculateBattlePoints(newPlayerRoster, state.opponentRoster, 'opponent');
+                set({ winner: 'opponent', phase: 'gameOver', lastBattlePoints: pts }); // FIX #2
                 get().addScore(pts);
                 return;
             } else {
@@ -678,13 +751,13 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             isOpponent: false,
         };
 
+        const pts = calculateBattlePoints(s.playerRoster, s.opponentRoster, 'opponent');
         set({
             winner: 'opponent',
             phase: 'gameOver',
             combatLogs: [log, ...s.combatLogs],
+            lastBattlePoints: pts, // FIX #2
         });
-        // apply penalty for surrender based on current rosters
-        const pts = calculateBattlePoints(s.playerRoster, s.opponentRoster, 'opponent');
         get().addScore(pts);
     },
 
@@ -693,8 +766,6 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         if (s.winner) return;
 
         if (!s.isPlayerTurn) {
-            // End of full round — both players acted
-            // Decrement effects and cooldowns for ALL characters each round
             let pRoster = s.playerRoster.map((c) => decrementCooldowns(decrementEffects(c)));
             let oRoster = s.opponentRoster.map((c) => decrementCooldowns(decrementEffects(c)));
 
@@ -714,7 +785,6 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 playerActionsUsed: {},
             });
         } else {
-            // Player just acted — now it's bot's turn
             set({ isPlayerTurn: false });
             setTimeout(() => get().executeOpponentTurn(), 1000);
         }

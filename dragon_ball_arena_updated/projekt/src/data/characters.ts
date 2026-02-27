@@ -1,1476 +1,783 @@
 import type { Character } from '../types';
 
+/**
+ * TIER SYSTEM
+ * ─────────────────────────────────────────────────────────
+ * T1 Common   (cost 1pt) – HP ~750-980,  ATK 62-84,  DEF 52-78
+ * T2 Elite    (cost 2pt) – HP 1100-1380, ATK 90-118, DEF 88-122
+ * T3 Legendary(cost 3pt) – HP 1560-1820, ATK 138-162, DEF 128-152
+ *
+ * Draft budget: 6 pts → valid teams e.g. 1+2+3, 2+2+2, 1+1+1+... (3v3)
+ *
+ * EFFECT DISTRIBUTION ACROSS CHARACTERS
+ * ─────────────────────────────────────────────────────────
+ * aoe       → Saibaman, Tien, Nappa, Goku SS, Frieza, Cell
+ * poison    → Saibaman, Frieza
+ * bleed     → Yamcha, Tien, Vegeta SS
+ * heal      → Krillin, Piccolo
+ * healAll   → Cell
+ * clear     → Videl, Piccolo
+ * senzu     → Krillin, Goku SS
+ * energy    → Yamcha, Nappa, Android 18
+ * drain     → Piccolo, Vegeta SS, Cell
+ * pierce    → Videl, Tien, Goku SS, Vegeta SS, Frieza
+ * stun      → Android 18, Tien, Goku SS
+ * weaken    → Nappa, Frieza, Android 18
+ * regen     → Piccolo, Frieza
+ * buff      → Goku SS
+ * 
+ * 
+ * 
+ * ki: 0, physical: 0, special: 0
+ */
+
 export const INITIAL_CHARACTERS: Character[] = [
+
+    // ══════════════════════════════════════════════════════════
+    // TIER 1 — COMMON
+    // ══════════════════════════════════════════════════════════
+
     {
-        id: 'goku',
-        tier: 2,
-        name: 'Son Goku',
-        maxHp: 1000,
-        stats: { attack: 80, defense: 60, speed: 70 },
-        imageColor: '#f97316',
-        portraitUrl: '/assets/characters/goku.png',
+        id: 'krillin',
+        name: 'Krillin',
+        tier: 1,
+        portraitUrl: '/assets/characters/krillin.png',
+        imageColor: '#f59e0b',
+        maxHp: 950,
+        stats: { attack: 68, defense: 74 },
         techniques: [
             {
-                id: 'kamehameha',
-                name: 'Kamehameha',
-                cost: { ki: 2, physical: 0, special: 0 },
-                damage: 150,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A powerful blast of Ki. Deals moderate damage.',
-                iconUrl: '/assets/techniques/kamehameha.png'
-            },
-            {
-                id: 'meteor_smash',
-                name: 'Meteor Smash',
-                cost: { ki: 0, physical: 2, special: 0 },
-                damage: 120,
-                cooldown: 1,
-                effect: 'weaken',
-                description: 'A barrage of physical attacks that weakens the opponent.',
-                iconUrl: '/assets/techniques/meteor_smash.png'
-            },
-            {
-                id: 'spirit_bomb',
-                name: 'Spirit Bomb',
-                cost: { ki: 2, physical: 0, special: 2 },
-                damage: 350,
-                cooldown: 4,
+                id: 'krillin_disc',
+                name: 'Destructo Disc',
+                damage: 130,
                 effect: 'pierce',
-                description: 'Massive damage that pierces defenses.',
-                iconUrl: '/assets/techniques/spirit_bomb.png'
-            }
+                cost: { ki: 1, physical: 1, special: 0 },
+                cooldown: 2,
+                description: 'A razor-sharp disc that bypasses all defenses.',
+                iconUrl: '/assets/techniques/destructive_disc.png',
+            },
+            {
+                id: 'krillin_kamehameha',
+                name: 'Kamehameha',
+                damage: 105,
+                effect: 'none',
+                cost: { ki: 1 },
+                cooldown: 0,
+                description: 'A concentrated beam of ki energy.',
+                iconUrl: '/assets/techniques/kamehameha.png',
+            },
+            {
+                id: 'krillin_heal',
+                name: 'Senzu Recovery',
+                damage: 0,
+                effect: 'heal',
+                cost: { any: 1 },
+                cooldown: 3,
+                description: 'Consume a Senzu Bean to restore 25% of max HP.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+            {
+                id: 'krillin_senzu_boost',
+                name: 'Ki Concentration',
+                damage: 0,
+                effect: 'senzu',
+                effectDuration: 1,
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'Focus ki energy to boost next attack by 15%.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+        ],
+        dodge: {
+            name: 'Martial Sidestep',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.68,
+            description: 'Years of training allow Krillin to evade attacks with ease.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'yamcha',
+        name: 'Yamcha',
+        tier: 1,
+        portraitUrl: '/assets/characters/yamcha.png',
+        imageColor: '#38bdf8',
+        maxHp: 820,
+        stats: { attack: 80, defense: 58 },
+        techniques: [
+            {
+                id: 'yamcha_wolf',
+                name: 'Wolf Fang Fist',
+                damage: 110,
+                effect: 'bleed',
+                effectDuration: 2,
+                cost: { physical: 1 },
+                cooldown: 1,
+                description: 'Vicious claw strikes that cause bleeding wounds.',
+                iconUrl: '/assets/techniques/wolf_fang_fist.png',
+            },
+            {
+                id: 'yamcha_spirit',
+                name: 'Spirit Ball',
+                damage: 125,
+                effect: 'none',
+                cost: { ki: 1 },
+                cooldown: 1,
+                description: 'A guided ki sphere that tracks the enemy.',
+                iconUrl: '/assets/techniques/spirit_ball.png',
+            },
+            {
+                id: 'yamcha_wave',
+                name: 'Kamehameha',
+                damage: 95,
+                effect: 'none',
+                cost: { ki: 1 },
+                cooldown: 0,
+                description: 'Yamcha\'s learned version of the iconic beam technique.',
+                iconUrl: '/assets/techniques/kamehameha_yamcha.png',
+            },
+            {
+                id: 'yamcha_energy',
+                name: 'Energy Charge',
+                damage: 0,
+                effect: 'energy',
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'Rapidly gather ki to gain bonus energy this turn.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+        ],
+        dodge: {
+            name: 'Wolf\'s Evasion',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.72,
+            description: 'Yamcha uses his agility to quickly sidestep attacks.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'videl',
+        name: 'Videl',
+        tier: 1,
+        portraitUrl: '/assets/characters/videl.png',
+        imageColor: '#ec4899',
+        maxHp: 880,
+        stats: { attack: 72, defense: 70 },
+        techniques: [
+            {
+                id: 'videl_counter',
+                name: 'Counter Smash',
+                damage: 135,
+                effect: 'pierce',
+                cost: { physical: 2 },
+                cooldown: 2,
+                description: 'A precise strike that cuts through the opponent\'s guard.',
+                iconUrl: '/assets/techniques/meteor_smash.png',
+            },
+            {
+                id: 'videl_kick',
+                name: 'Flying Kick',
+                damage: 100,
+                effect: 'weaken',
+                effectDuration: 2,
+                cost: { physical: 1, ki: 1 },
+                cooldown: 1,
+                description: 'An aerial kick that disrupts the opponent\'s focus.',
+                iconUrl: '/assets/techniques/mach_kick.png',
+            },
+            {
+                id: 'videl_punch',
+                name: 'Rapid Strikes',
+                damage: 88,
+                effect: 'none',
+                cost: { physical: 1 },
+                cooldown: 0,
+                description: 'A flurry of fast punches.',
+                iconUrl: '/assets/techniques/perfect_combo.png',
+            },
+            {
+                id: 'videl_clear',
+                name: 'Focus Mind',
+                damage: 0,
+                effect: 'clear',
+                cost: { any: 1 },
+                cooldown: 3,
+                description: 'Clear your mind and remove all negative status effects.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+        ],
+        dodge: {
+            name: 'Aerial Retreat',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.70,
+            description: 'Videl uses flight to evade incoming attacks.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'saibaman',
+        name: 'Saibaman',
+        tier: 1,
+        portraitUrl: '/assets/characters/dodoria.png',
+        imageColor: '#84cc16',
+        maxHp: 760,
+        stats: { attack: 84, defense: 52 },
+        techniques: [
+            {
+                id: 'saiba_acid',
+                name: 'Acid Spit',
+                damage: 90,
+                effect: 'poison',
+                effectDuration: 3,
+                cost: { ki: 1 },
+                cooldown: 1,
+                description: 'Spray corrosive acid that poisons the target for 3 turns.',
+                iconUrl: '/assets/techniques/stone_spit.png',
+            },
+            {
+                id: 'saiba_scratch',
+                name: 'Claw Slash',
+                damage: 105,
+                effect: 'bleed',
+                effectDuration: 2,
+                cost: { physical: 1 },
+                cooldown: 0,
+                description: 'Sharp claws rake across the enemy causing bleeding.',
+                iconUrl: '/assets/techniques/blue_hurricane.png',
+            },
+            {
+                id: 'saiba_aoe',
+                name: 'Scatter Blast',
+                damage: 75,
+                effect: 'aoe',
+                cost: { ki: 1 },
+                cooldown: 2,
+                description: 'Sprays ki blasts to hit all opponents.',
+                iconUrl: '/assets/techniques/scatter_kamehameha.png',
+            },
+            {
+                id: 'saiba_burst',
+                name: 'Energy Burst',
+                damage: 120,
+                effect: 'none',
+                cost: { ki: 1, any: 1 },
+                cooldown: 1,
+                description: 'A focused burst of raw ki energy.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+        ],
+        dodge: {
+            name: 'Evasive Skitter',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.62,
+            description: 'Saibaman rapidly shuffles to avoid direct hits.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // TIER 2 — ELITE
+    // ══════════════════════════════════════════════════════════
+
+    {
+        id: 'piccolo',
+        name: 'Piccolo',
+        tier: 2,
+        portraitUrl: '/assets/characters/piccolo.png',
+        imageColor: '#22c55e',
+        maxHp: 1200,
+        stats: { attack: 102, defense: 108 },
+        techniques: [
+            {
+                id: 'piccolo_sbc',
+                name: 'Special Beam Cannon',
+                damage: 185,
+                effect: 'pierce',
+                cost: { ki: 2, any: 1 },
+                cooldown: 2,
+                description: 'A drill-like beam that pierces all defenses.',
+                iconUrl: '/assets/techniques/special_beam_cannon.png',
+            },
+            {
+                id: 'piccolo_regen',
+                name: 'Namekian Regen',
+                damage: 0,
+                effect: 'regen',
+                effectDuration: 2,
+                cost: { any: 1 },
+                cooldown: 3,
+                description: 'Piccolo\'s Namekian blood allows rapid regeneration for 2 turns.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+            {
+                id: 'piccolo_drain',
+                name: 'Mystic Absorption',
+                damage: 150,
+                effect: 'drain',
+                cost: { any: 2 },
+                cooldown: 2,
+                description: 'Absorb the enemy\'s energy while dealing damage.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+            {
+                id: 'piccolo_clear',
+                name: 'Purification',
+                damage: 0,
+                effect: 'clear',
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'Purge all negative effects from yourself.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+        ],
+        dodge: {
+            name: 'Cape Deflection',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.60,
+            description: 'Piccolo uses his weighted cape to deflect incoming blows.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'android18',
+        name: 'Android 18',
+        tier: 2,
+        portraitUrl: '/assets/characters/android18.png',
+        imageColor: '#f472b6',
+        maxHp: 1150,
+        stats: { attack: 114, defense: 96 },
+        techniques: [
+            {
+                id: 'a18_volley',
+                name: 'Energy Volley',
+                damage: 130,
+                effect: 'aoe',
+                cost: { ki: 2 },
+                cooldown: 2,
+                description: 'A barrage of ki blasts that hits all opponents.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+            {
+                id: 'a18_stun',
+                name: 'Android Lock',
+                damage: 115,
+                effect: 'stun',
+                effectDuration: 1,
+                cost: { physical: 1 },
+                cooldown: 2,
+                description: 'A precise strike that stuns the enemy for 1 turn.',
+                iconUrl: '/assets/techniques/mach_kick.png',
+            },
+            {
+                id: 'a18_blitz',
+                name: 'Power Blitz',
+                damage: 155,
+                effect: 'weaken',
+                effectDuration: 2,
+                cost: { ki: 2, physical: 1 },
+                cooldown: 2,
+                description: 'A powerful blast that weakens the opponent\'s defenses.',
+                iconUrl: '/assets/techniques/power_blitz.png',
+            },
+            {
+                id: 'a18_energy',
+                name: 'Infinite Energy',
+                damage: 0,
+                effect: 'energy',
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'Android 18\'s infinite energy core generates bonus energy.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+        ],
+        dodge: {
+            name: 'Android Reflex',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.72,
+            description: 'Android 18\'s enhanced reflexes allow precise evasion.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'tien',
+        name: 'Tien',
+        tier: 2,
+        portraitUrl: '/assets/characters/tien.png',
+        imageColor: '#60a5fa',
+        maxHp: 1100,
+        stats: { attack: 110, defense: 102 },
+        techniques: [
+            {
+                id: 'tien_tribeam',
+                name: 'Neo Tri-Beam',
+                damage: 195,
+                effect: 'pierce',
+                cost: { ki: 2, any: 1 },
+                cooldown: 2,
+                description: 'Channeling life energy, this beam pierces all barriers.',
+                iconUrl: '/assets/techniques/tri_beam.png',
+            },
+            {
+                id: 'tien_aoe',
+                name: 'Tri-Beam Barrage',
+                damage: 110,
+                effect: 'aoe',
+                cost: { any: 3 },
+                cooldown: 2,
+                description: 'Multiple tri-beam blasts aimed at all enemies.',
+                iconUrl: '/assets/techniques/tri_beam.png',
+            },
+            {
+                id: 'tien_bleed',
+                name: 'Four Witches',
+                damage: 140,
+                effect: 'bleed',
+                effectDuration: 2,
+                cost: { special: 1, physical: 1 },
+                cooldown: 1,
+                description: 'Four-armed assault that tears through the opponent.',
+                iconUrl: '/assets/techniques/meteor_smash.png',
+            },
+            {
+                id: 'tien_solar',
+                name: 'Solar Flare',
+                damage: 0,
+                effect: 'stun',
+                effectDuration: 1,
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'A blinding flash of light that stuns the opponent.',
+                iconUrl: '/assets/techniques/solar_flare.png',
+            },
+        ],
+        dodge: {
+            name: 'Third Eye Foresight',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.66,
+            description: 'Tien\'s third eye allows him to predict and dodge attacks.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    {
+        id: 'nappa',
+        name: 'Nappa',
+        tier: 2,
+        portraitUrl: '/assets/characters/nappa.png',
+        imageColor: '#94a3b8',
+        maxHp: 1380,
+        stats: { attack: 96, defense: 122 },
+        techniques: [
+            {
+                id: 'nappa_storm',
+                name: 'Blazing Storm',
+                damage: 120,
+                effect: 'aoe',
+                cost: { special: 1, ki: 1 },
+                cooldown: 1,
+                description: 'A sweeping barrage of ki blasts that hits all enemies.',
+                iconUrl: '/assets/techniques/giant_storm.png',
+            },
+            {
+                id: 'nappa_cannon',
+                name: 'Break Cannon',
+                damage: 160,
+                effect: 'none',
+                cost: { physical: 2, ki: 1 },
+                cooldown: 1,
+                description: 'A devastating energy beam from this elite Saiyan.',
+                iconUrl: '/assets/techniques/break_cannon.png',
+            },
+            {
+                id: 'nappa_weaken',
+                name: 'Giant Storm',
+                damage: 130,
+                effect: 'weaken',
+                effectDuration: 2,
+                cost: { ki: 2 },
+                cooldown: 2,
+                description: 'An overwhelming blast that shatters the enemy\'s guard.',
+                iconUrl: '/assets/techniques/giant_storm.png',
+            },
+            {
+                id: 'nappa_energy',
+                name: 'Elite Charge',
+                damage: 0,
+                effect: 'energy',
+                cost: { any: 1 },
+                cooldown: 2,
+                description: 'Nappa draws on his elite Saiyan blood to generate energy.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+        ],
+        dodge: {
+            name: 'Saiyan Grit',
+            cost: { any: 0 },
+            cooldown: 2,
+            successRate: 0.48,
+            description: 'Nappa barely dodges, relying on raw toughness.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // TIER 3 — LEGENDARY
+    // ══════════════════════════════════════════════════════════
+
+    {
+        id: 'goku_ss',
+        name: 'Goku (SS)',
+        tier: 3,
+        portraitUrl: '/assets/characters/goku.png',
+        imageColor: '#facc15',
+        maxHp: 1650,
+        stats: { attack: 158, defense: 132 },
+        techniques: [
+            {
+                id: 'goku_x10',
+                name: 'Kamehameha ×10',
+                damage: 260,
+                effect: 'pierce',
+                cost: { ki: 3 },
+                cooldown: 2,
+                description: 'A Super Saiyan Kamehameha ten times more powerful than usual.',
+                iconUrl: '/assets/techniques/kamehameha.png',
+            },
+            {
+                id: 'goku_spirit',
+                name: 'Super Spirit Bomb',
+                damage: 220,
+                effect: 'aoe',
+                cost: { special: 2, any: 1 },
+                cooldown: 3,
+                description: 'A massive sphere of energy that damages all opponents.',
+                iconUrl: '/assets/techniques/spirit_bomb.png',
+            },
+            {
+                id: 'goku_senzu',
+                name: 'Kaioken Boost',
+                damage: 0,
+                effect: 'senzu',
+                effectDuration: 2,
+                cost: { any: 1 },
+                cooldown: 3,
+                description: 'Activate Kaioken to boost damage output by 15% for 2 turns.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
+            {
+                id: 'goku_stun',
+                name: 'Instant Transmission Strike',
+                damage: 200,
+                effect: 'stun',
+                effectDuration: 1,
+                cost: { ki: 1, physical: 1, any: 1 },
+                cooldown: 2,
+                description: 'Teleport behind the enemy and strike before they can react.',
+                iconUrl: '/assets/techniques/space_mach_attack.png',
+            },
         ],
         dodge: {
             name: 'Instant Transmission',
-            successRate: 0.8,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Teleports away from danger.',
-            iconUrl: '/assets/techniques/solar_flare.png'
-        }
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.82,
+            description: 'Goku teleports out of harm\'s way instantly.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
     },
+
     {
-        id: 'vegeta',
-        tier: 2,
-        name: 'Vegeta',
-        maxHp: 950,
-        stats: { attack: 90, defense: 50, speed: 80 },
-        imageColor: '#3b82f6',
+        id: 'vegeta_ss',
+        name: 'Vegeta (SS)',
+        tier: 3,
         portraitUrl: '/assets/characters/vegeta.png',
+        imageColor: '#a78bfa',
+        maxHp: 1580,
+        stats: { attack: 156, defense: 128 },
         techniques: [
             {
-                id: 'galick_gun',
-                name: 'Galick Gun',
-                cost: { ki: 2, physical: 0, special: 0 },
-                damage: 160,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A concentrated purple beam of Ki.',
-                iconUrl: '/assets/techniques/galick_gun.png'
-            },
-            {
-                id: 'final_flash',
+                id: 'vegeta_final',
                 name: 'Final Flash',
-                cost: { ki: 3, physical: 0, special: 1 },
-                damage: 250,
-                cooldown: 3,
-                effect: 'none',
-                description: 'Fires an incredibly destructive energy wave.',
-                iconUrl: '/assets/techniques/final_flash.png'
-            },
-            {
-                id: 'big_bang_attack',
-                name: 'Big Bang Attack',
-                cost: { ki: 1, physical: 1, special: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'Fires a massive sphere of energy that can stun.',
-                iconUrl: '/assets/techniques/big_bang_attack.png'
-            }
-        ],
-        dodge: {
-            name: 'Afterimage Strike',
-            successRate: 0.7,
-            cost: { ki: 1 },
-            cooldown: 1,
-            description: 'Moves so fast it leaves an afterimage, dodging attacks.',
-            iconUrl: '/assets/techniques/saiyan_spirit.png'
-        }
-    },
-    {
-        id: 'piccolo',
-        tier: 2,
-        name: 'Piccolo',
-        maxHp: 1100,
-        stats: { attack: 65, defense: 80, speed: 60 },
-        imageColor: '#22c55e',
-        portraitUrl: '/assets/characters/piccolo.png',
-        techniques: [
-            {
-                id: 'special_beam_cannon',
-                name: 'Special Beam Cannon',
-                cost: { ki: 2, special: 1 },
-                damage: 220,
-                cooldown: 3,
+                damage: 270,
                 effect: 'pierce',
-                description: 'A highly concentrated beam that pierces defenses.',
-                iconUrl: '/assets/techniques/special_beam_cannon.png'
-            },
-            {
-                id: 'demon_hand',
-                name: 'Demon Hand',
-                cost: { physical: 2 },
-                damage: 100,
-                cooldown: 1,
-                effect: 'stun',
-                description: 'Stretches arm to grab and stun the opponent.',
-                iconUrl: '/assets/techniques/demon_hand.png'
-            },
-            {
-                id: 'light_grenade',
-                name: 'Light Grenade',
                 cost: { ki: 3 },
-                damage: 200,
                 cooldown: 3,
-                effect: 'none',
-                description: 'Fires a devastating ball of light energy.',
-                iconUrl: '/assets/techniques/light_grenade.png'
-            }
+                description: 'The Prince of Saiyans charges a devastating piercing blast.',
+                iconUrl: '/assets/techniques/final_flash.png',
+            },
+            {
+                id: 'vegeta_big',
+                name: 'Big Bang Attack',
+                damage: 210,
+                effect: 'aoe',
+                cost: { ki: 1, special: 1, any: 1 },
+                cooldown: 2,
+                description: 'An explosive blast that hits all opponents.',
+                iconUrl: '/assets/techniques/big_bang_attack.png',
+            },
+            {
+                id: 'vegeta_drain',
+                name: 'Energy Drain',
+                damage: 180,
+                effect: 'drain',
+                cost: { ki: 2, any: 1 },
+                cooldown: 2,
+                description: 'Sap the opponent\'s life force to restore your own HP.',
+                iconUrl: '/assets/techniques/energy_absorb.png',
+            },
+            {
+                id: 'vegeta_galick',
+                name: 'Galick Gun',
+                damage: 190,
+                effect: 'bleed',
+                effectDuration: 2,
+                cost: { ki: 1, physical: 1 },
+                cooldown: 3,
+                description: 'A powerful beam that tears through the opponent, causing bleeding.',
+                iconUrl: '/assets/techniques/galick_gun.png',
+            },
         ],
         dodge: {
-            name: 'Rapid Movement',
-            successRate: 0.6,
-            cost: { physical: 1 },
+            name: 'Saiyan Pride Dash',
+            cost: { any: 1 },
             cooldown: 1,
-            description: 'Quickly evades the attack.',
-            iconUrl: '/assets/techniques/multi_form.png'
-        }
+            successRate: 0.65,
+            description: 'Vegeta moves with Saiyan speed to evade.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
     },
+
     {
         id: 'frieza',
-        tier: 2,
         name: 'Frieza',
-        maxHp: 900,
-        stats: { attack: 85, defense: 60, speed: 85 },
-        imageColor: '#c084fc',
+        tier: 3,
         portraitUrl: '/assets/characters/frieza.png',
+        imageColor: '#c084fc',
+        maxHp: 1720,
+        stats: { attack: 142, defense: 144 },
         techniques: [
             {
-                id: 'death_beam',
+                id: 'frieza_death_beam',
                 name: 'Death Beam',
-                cost: { ki: 1, special: 1 },
-                damage: 130,
-                cooldown: 1,
+                damage: 240,
                 effect: 'pierce',
-                description: 'A swift, piercing beam from the finger.',
-                iconUrl: '/assets/techniques/death_beam.png'
+                cost: { any: 4 },
+                cooldown: 1,
+                description: 'A precise beam of death energy that bypasses all defenses.',
+                iconUrl: '/assets/techniques/death_beam.png',
             },
             {
-                id: 'death_ball',
+                id: 'frieza_death_ball',
                 name: 'Death Ball',
-                cost: { ki: 3, special: 2 },
-                damage: 300,
-                cooldown: 4,
-                effect: 'none',
-                description: 'A massive sphere of destructive energy.',
-                iconUrl: '/assets/techniques/death_ball.png'
+                damage: 180,
+                effect: 'aoe',
+                cost: { ki: 3 },
+                cooldown: 3,
+                description: 'A massive sphere of dark energy that devastates all opponents.',
+                iconUrl: '/assets/techniques/death_ball.png',
             },
             {
-                id: 'telekenesis',
-                name: 'Telekinesis',
-                cost: { special: 1 },
-                damage: 50,
+                id: 'frieza_poison',
+                name: 'Dark Aura',
+                damage: 130,
+                effect: 'poison',
+                effectDuration: 3,
+                cost: { special: 2 },
                 cooldown: 2,
-                effect: 'stun',
-                description: 'Uses mind powers to paralyze the enemy.',
-                iconUrl: '/assets/techniques/telekenesis.png'
-            }
+                description: 'Frieza\'s dark energy seeps into wounds, poisoning the target.',
+                iconUrl: '/assets/techniques/evil_flame.png',
+            },
+            {
+                id: 'frieza_regen',
+                name: 'Emperor\'s Regen',
+                damage: 0,
+                effect: 'regen',
+                effectDuration: 3,
+                cost: { any: 2 },
+                cooldown: 4,
+                description: 'Frieza activates his immense life force to regenerate for 3 turns.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
+            },
         ],
         dodge: {
-            name: 'Hover Maneuver',
-            successRate: 0.75,
-            cost: { ki: 1 },
-            cooldown: 2,
-            description: 'Swiftly glides out of harms way.',
-            iconUrl: '/assets/techniques/death_chaser.png'
-        }
+            name: 'Emperor\'s Grace',
+            cost: { any: 1 },
+            cooldown: 1,
+            successRate: 0.68,
+            description: 'Frieza floats effortlessly out of reach.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
     },
+
     {
         id: 'cell',
+        name: 'Cell (Perfect)',
         tier: 3,
-        name: 'Perfect Cell',
-        maxHp: 1050,
-        stats: { attack: 75, defense: 75, speed: 75 },
-        imageColor: '#84cc16',
         portraitUrl: '/assets/characters/cell.png',
+        imageColor: '#4ade80',
+        maxHp: 1820,
+        stats: { attack: 148, defense: 150 },
         techniques: [
             {
-                id: 'solar_kamehameha',
+                id: 'cell_kamehameha',
                 name: 'Solar Kamehameha',
-                cost: { ki: 3, special: 1 },
-                damage: 260,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A massive Kamehameha capable of destroying a solar system.',
-                iconUrl: '/assets/techniques/solar_kamehameha.png'
-            },
-            {
-                id: 'energy_absorb',
-                name: 'Energy Drain',
-                cost: { physical: 2, ki: 1 },
-                damage: 100,
-                cooldown: 3,
-                effect: 'buff',
-                description: 'Drains enemy energy to heal and buff self.',
-                iconUrl: '/assets/techniques/energy_absorb.png'
-            },
-            {
-                id: 'perfect_combo',
-                name: 'Perfect Combo',
-                cost: { physical: 3 },
-                damage: 180,
+                damage: 255,
+                effect: 'pierce',
+                cost: { ki: 2, special: 1 },
                 cooldown: 2,
-                effect: 'weaken',
-                description: 'A flawless string of physical attacks.',
-                iconUrl: '/assets/techniques/perfect_combo.png'
-            }
-        ],
-        dodge: {
-            name: 'Perfect Barrier',
-            successRate: 0.9,
-            cost: { ki: 2 },
-            cooldown: 3,
-            description: 'Generates an impenetrable barrier.',
-            iconUrl: '/assets/techniques/android_barrier.png'
-        }
-    },
-    {
-        id: 'buu',
-        tier: 3,
-        name: 'Majin Buu',
-        maxHp: 1200,
-        stats: { attack: 70, defense: 85, speed: 50 },
-        imageColor: '#f472b6',
-        portraitUrl: '/assets/characters/buu.png',
-        techniques: [
-            {
-                id: 'candy_beam',
-                name: 'Candy Beam',
-                cost: { special: 2 },
-                damage: 80,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Turns the opponent briefly into candy, stunning them.',
-                iconUrl: '/assets/techniques/candy_beam.png'
+                description: 'Cell\'s perfect form unleashes a solar-powered Kamehameha.',
+                iconUrl: '/assets/techniques/solar_kamehameha.png',
             },
             {
-                id: 'innocence_breath',
-                name: 'Innocence Breath',
+                id: 'cell_drain',
+                name: 'Perfect Absorption',
+                damage: 195,
+                effect: 'drain',
                 cost: { ki: 2, physical: 1 },
-                damage: 150,
                 cooldown: 2,
-                effect: 'weaken',
-                description: 'Exhales a massive cloud of destructive energy.',
-                iconUrl: '/assets/techniques/innocence_breath.png'
+                description: 'Cell absorbs energy through his tail, draining enemy HP.',
+                iconUrl: '/assets/techniques/body_change.png',
             },
             {
-                id: 'angry_explosion',
-                name: 'Angry Explosion',
-                cost: { ki: 2, special: 2 },
-                damage: 280,
-                cooldown: 4,
-                effect: 'none',
-                description: 'Unleashes stored anger in a giant explosion.',
-                iconUrl: '/assets/techniques/angry_explosion.png'
-            }
-        ],
-        dodge: {
-            name: 'Body Regeneration',
-            successRate: 0.6,
-            cost: { physical: 1, special: 1 },
-            cooldown: 2,
-            description: 'Molds body to avoid the attack completely.',
-            iconUrl: '/assets/techniques/hidden_potential.png'
-        }
-    },
-    {
-        id: 'gohan',
-        tier: 2,
-        name: 'Son Gohan',
-        maxHp: 950,
-        stats: { attack: 85, defense: 65, speed: 75 },
-        imageColor: '#60a5fa',
-        portraitUrl: '/assets/characters/gohan.png',
-        techniques: [
-            {
-                id: 'masenko',
-                name: 'Masenko',
-                cost: { ki: 2 },
-                damage: 140,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Fires a quick energy blast.',
-                iconUrl: '/assets/techniques/masenko.png'
-            },
-            {
-                id: 'hidden_potential',
-                name: 'Hidden Potential',
-                cost: { special: 2 },
+                id: 'cell_heal_all',
+                name: 'Cellular Regeneration',
                 damage: 0,
-                cooldown: 4,
-                effect: 'buff',
-                description: 'Unlocks latent power to drastically buff stats.',
-                iconUrl: '/assets/techniques/hidden_potential.png'
-            },
-            {
-                id: 'father_son_kamehameha',
-                name: 'Father-Son Kamehameha',
-                cost: { ki: 3, special: 1 },
-                damage: 280,
-                cooldown: 4,
-                effect: 'pierce',
-                description: 'An overwhelmingly powerful blast.',
-                iconUrl: '/assets/techniques/father_son_kamehameha.png'
-            }
-        ],
-        dodge: {
-            name: 'Super Speed',
-            successRate: 0.7,
-            cost: { physical: 1 },
-            cooldown: 1,
-            description: 'Evades quickly.',
-            iconUrl: '/assets/techniques/scatter_kamehameha.png'
-        }
-    },
-    {
-        id: 'trunks',
-        tier: 2,
-        name: 'Future Trunks',
-        maxHp: 900,
-        stats: { attack: 80, defense: 60, speed: 85 },
-        imageColor: '#818cf8',
-        portraitUrl: '/assets/characters/trunks.png',
-        techniques: [
-            {
-                id: 'burning_attack',
-                name: 'Burning Attack',
-                cost: { ki: 2 },
-                damage: 150,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'A barrage of rapid hand movements followed by a fiery blast.',
-                iconUrl: '/assets/techniques/burning_attack.png'
-            },
-            {
-                id: 'shining_sword_attack',
-                name: 'Shining Sword Attack',
-                cost: { physical: 2, special: 1 },
-                damage: 200,
-                cooldown: 3,
-                effect: 'none',
-                description: 'Slices the opponent rapidly.',
-                iconUrl: '/assets/techniques/shining_sword_attack.png'
-            },
-            {
-                id: 'heat_dome',
-                name: 'Heat Dome Attack',
-                cost: { ki: 3, special: 1 },
-                damage: 260,
-                cooldown: 4,
-                effect: 'pierce',
-                description: 'Surrounds self in energy and fires upwards.',
-                iconUrl: '/assets/techniques/heat_dome.png'
-            }
-        ],
-        dodge: {
-            name: 'Sword Block',
-            successRate: 0.75,
-            cost: { physical: 1 },
-            cooldown: 1,
-            description: 'Deflects with sword.',
-            iconUrl: '/assets/techniques/rebellion_trigger.png'
-        }
-    },
-    {
-        id: 'krillin',
-        tier: 1,
-        name: 'Krillin',
-        maxHp: 800,
-        stats: { attack: 60, defense: 70, speed: 75 },
-        imageColor: '#fb923c',
-        portraitUrl: '/assets/characters/krillin.png',
-        techniques: [
-            {
-                id: 'destructo_disc',
-                name: 'Destructo Disc',
-                cost: { ki: 2, special: 1 },
-                damage: 250,
-                cooldown: 3,
-                effect: 'pierce',
-                description: 'A razor-sharp disc of energy that cuts through anything.',
-                iconUrl: '/assets/techniques/destructo_disc.png'
-            },
-            {
-                id: 'solar_flare',
-                name: 'Solar Flare',
-                cost: { special: 1 },
-                damage: 10,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'Blinds the enemy temporarily.',
-                iconUrl: '/assets/techniques/solar_flare.png'
-            },
-            {
-                id: 'scatter_kamehameha',
-                name: 'Scatter Kamehameha',
-                cost: { ki: 3 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Fires multiple blasts at once.',
-                iconUrl: '/assets/techniques/scatter_kamehameha.png'
-            }
-        ],
-        dodge: {
-            name: 'Tactical Retreat',
-            successRate: 0.8,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Ducks out of the way.',
-            iconUrl: '/assets/techniques/solar_flare.png'
-        }
-    },
-    {
-        id: 'tien',
-        tier: 1,
-        name: 'Tien Shinhan',
-        maxHp: 850,
-        stats: { attack: 70, defense: 65, speed: 70 },
-        imageColor: '#14b8a6',
-        portraitUrl: '/assets/characters/tien.png',
-        techniques: [
-            {
-                id: 'tri_beam',
-                name: 'Tri-Beam',
-                cost: { ki: 3, special: 1 },
-                damage: 270,
-                cooldown: 4,
-                effect: 'stun',
-                description: 'A powerful blast that drains the user.',
-                iconUrl: '/assets/techniques/tri_beam.png'
-            },
-            {
-                id: 'dodompa',
-                name: 'Dodompa',
-                cost: { ki: 1 },
-                damage: 90,
-                cooldown: 1,
-                effect: 'pierce',
-                description: 'A quick, piercing beam.',
-                iconUrl: '/assets/techniques/dodompa.png'
-            },
-            {
-                id: 'multi_form',
-                name: 'Multi-Form',
+                effect: 'healAll',
                 cost: { special: 2 },
-                damage: 0,
-                cooldown: 5,
-                effect: 'buff',
-                description: 'Creates clones, buffing attack.',
-                iconUrl: '/assets/techniques/multi_form.png'
-            }
-        ],
-        dodge: {
-            name: 'Four Witches Guard',
-            successRate: 0.6,
-            cost: { physical: 1, ki: 1 },
-            cooldown: 2,
-            description: 'Uses extra arms to block.',
-            iconUrl: '/assets/techniques/multi_form.png'
-        }
-    },
-    {
-        id: 'yamcha',
-        tier: 1,
-        name: 'Yamcha',
-        maxHp: 800,
-        stats: { attack: 65, defense: 60, speed: 80 },
-        imageColor: '#f87171',
-        portraitUrl: '/assets/characters/yamcha.png',
-        techniques: [
-            {
-                id: 'wolf_fang_fist',
-                name: 'Wolf Fang Fist',
-                cost: { physical: 2 },
-                damage: 130,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'A flurry of rapid physical strikes.',
-                iconUrl: '/assets/techniques/wolf_fang_fist.png'
-            },
-            {
-                id: 'spirit_ball',
-                name: 'Spirit Ball',
-                cost: { ki: 2, special: 1 },
-                damage: 180,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A controllable ball of energy.',
-                iconUrl: '/assets/techniques/spirit_ball.png'
-            },
-            {
-                id: 'kamehameha_yamcha',
-                name: 'Kamehameha',
-                cost: { ki: 2 },
-                damage: 120,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A standard energy wave.',
-                iconUrl: '/assets/techniques/kamehameha_yamcha.png'
-            }
-        ],
-        dodge: {
-            name: 'Quick Step',
-            successRate: 0.7,
-            cost: { physical: 1 },
-            cooldown: 1,
-            description: 'Steps out of the way.',
-            iconUrl: '/assets/techniques/wolf_fang_fist.png'
-        }
-    },
-    {
-        id: 'android18',
-        tier: 2,
-        name: 'Android 18',
-        maxHp: 950,
-        stats: { attack: 75, defense: 75, speed: 85 },
-        imageColor: '#fde047',
-        portraitUrl: '/assets/characters/android18.png',
-        techniques: [
-            {
-                id: 'destructive_disc',
-                name: 'Destructive Disc',
-                cost: { ki: 2, special: 1 },
-                damage: 200,
-                cooldown: 3,
-                effect: 'pierce',
-                description: 'Similar to Krillin\'s disc.',
-                iconUrl: '/assets/techniques/destructive_disc.png'
-            },
-            {
-                id: 'sadistic_dance',
-                name: 'Sadistic Dance',
-                cost: { physical: 3 },
-                damage: 190,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'A brutal combo of physical attacks.',
-                iconUrl: '/assets/techniques/sadistic_dance.png'
-            },
-            {
-                id: 'high_pressure_blast',
-                name: 'High Pressure Blast',
-                cost: { ki: 2 },
-                damage: 140,
-                cooldown: 1,
-                effect: 'none',
-                description: 'A localized explosion.',
-                iconUrl: '/assets/techniques/high_pressure_blast.png'
-            }
-        ],
-        dodge: {
-            name: 'Infinite Energy Guard',
-            successRate: 0.8,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Uses unlimited energy to generate a weak shield.',
-            iconUrl: '/assets/techniques/android_barrier.png'
-        }
-    },
-    {
-        id: 'android17',
-        tier: 2,
-        name: 'Android 17',
-        maxHp: 950,
-        stats: { attack: 75, defense: 80, speed: 85 },
-        imageColor: '#10b981',
-        portraitUrl: '/assets/characters/android17.png',
-        techniques: [
-            {
-                id: 'android_barrier',
-                name: 'Android Barrier',
-                cost: { special: 2 },
-                damage: 50,
                 cooldown: 4,
-                effect: 'buff',
-                description: 'Deals minor damage while buffing defense heavily.',
-                iconUrl: '/assets/techniques/android_barrier.png'
+                description: 'Cell broadcasts regenerative energy that heals all allied fighters.',
+                iconUrl: '/assets/techniques/hidden_potential.png',
             },
             {
-                id: 'super_electric_strike',
-                name: 'Super Electric Strike',
-                cost: { ki: 3, physical: 1 },
-                damage: 220,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Throws a massive wave of electrical energy.',
-                iconUrl: '/assets/techniques/super_electric_strike.png'
+                id: 'cell_bio_bomb',
+                name: 'Bio-Blaster Barrage',
+                damage: 155,
+                effect: 'aoe',
+                cost: { special: 1, any: 1 },
+                cooldown: 2,
+                description: 'Cell fires a barrage of bio-electricity at all opponents.',
+                iconUrl: '/assets/techniques/super_electric_strike.png',
             },
-            {
-                id: 'power_blitz',
-                name: 'Power Blitz',
-                cost: { ki: 2 },
-                damage: 130,
-                cooldown: 1,
-                effect: 'none',
-                description: 'Fires basic energy spheres.',
-                iconUrl: '/assets/techniques/power_blitz.png'
-            }
         ],
         dodge: {
-            name: 'Parkour Dodge',
-            successRate: 0.75,
-            cost: { physical: 1 },
+            name: 'Perfect Evasion',
+            cost: { any: 1 },
             cooldown: 1,
-            description: 'Nimble movement to avoid attacks.',
-            iconUrl: '/assets/techniques/android_barrier.png'
-        }
+            successRate: 0.70,
+            description: 'Cell\'s perfect body allows flawless evasion.',
+            iconUrl: '/assets/techniques/martial_arts.png',
+        },
     },
-    {
-        id: 'android16',
-        tier: 2,
-        name: 'Android 16',
-        maxHp: 1100,
-        stats: { attack: 85, defense: 85, speed: 50 },
-        imageColor: '#059669',
-        portraitUrl: '/assets/characters/android16.png',
-        techniques: [
-            {
-                id: 'hells_flash',
-                name: 'Hell\'s Flash',
-                cost: { ki: 3, special: 2 },
-                damage: 280,
-                cooldown: 4,
-                effect: 'pierce',
-                description: 'Removes hands to fire devastating cannons.',
-                iconUrl: '/assets/techniques/hells_flash.png'
-            },
-            {
-                id: 'rocket_punch',
-                name: 'Rocket Punch',
-                cost: { physical: 2 },
-                damage: 150,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'Fires his arm like a missile.',
-                iconUrl: '/assets/techniques/recoome_mach_punch.png'
-            },
-            {
-                id: 'bear_hug',
-                name: 'Bear Hug',
-                cost: { physical: 3 },
-                damage: 180,
-                cooldown: 3,
-                effect: 'weaken',
-                description: 'Crushes the opponent.',
-                iconUrl: '/assets/techniques/bear_hug.png'
-            }
-        ],
-        dodge: {
-            name: 'Tough Armor',
-            successRate: 0.5,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Rely on pure defense, mitigating the hit.',
-            iconUrl: '/assets/techniques/android_barrier.png'
-        }
-    },
-    {
-        id: 'bardock',
-        tier: 2,
-        name: 'Bardock',
-        maxHp: 950,
-        stats: { attack: 85, defense: 60, speed: 70 },
-        imageColor: '#b91c1c',
-        portraitUrl: '/assets/characters/bardock.png',
-        techniques: [
-            {
-                id: 'riot_javelin',
-                name: 'Riot Javelin',
-                cost: { ki: 2, physical: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'A final, desperate energy blast.',
-                iconUrl: '/assets/techniques/riot_javelin.png'
-            },
-            {
-                id: 'saiyan_spirit',
-                name: 'Saiyan Spirit',
-                cost: { physical: 2, special: 1 },
-                damage: 200,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A fierce combo of desperate punches.',
-                iconUrl: '/assets/techniques/saiyan_spirit.png'
-            },
-            {
-                id: 'rebellion_trigger',
-                name: 'Rebellion Trigger',
-                cost: { ki: 3 },
-                damage: 230,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A concentrated wave of energy.',
-                iconUrl: '/assets/techniques/rebellion_trigger.png'
-            }
-        ],
-        dodge: {
-            name: 'Premonition',
-            successRate: 0.65,
-            cost: { special: 1 },
-            cooldown: 3,
-            description: 'Sees the future briefly to dodge.',
-            iconUrl: '/assets/techniques/saiyan_spirit.png'
-        }
-    },
-    {
-        id: 'broly',
-        tier: 3,
-        name: 'Broly (DBZ)',
-        maxHp: 1300,
-        stats: { attack: 100, defense: 80, speed: 65 },
-        imageColor: '#a3e635',
-        portraitUrl: '/assets/characters/broly.png',
-        techniques: [
-            {
-                id: 'omega_blaster',
-                name: 'Omega Blaster',
-                cost: { ki: 3, special: 2 },
-                damage: 320,
-                cooldown: 4,
-                effect: 'none',
-                description: 'A massive sphere of green ki.',
-                iconUrl: '/assets/techniques/omega_blaster.png'
-            },
-            {
-                id: 'eraser_cannon',
-                name: 'Eraser Cannon',
-                cost: { ki: 2, physical: 1 },
-                damage: 200,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'A powerful blast from the hand.',
-                iconUrl: '/assets/techniques/eraser_cannon.png'
-            },
-            {
-                id: 'gigantic_slam',
-                name: 'Gigantic Slam',
-                cost: { physical: 3 },
-                damage: 240,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Slams the enemy into the ground.',
-                iconUrl: '/assets/techniques/gigantic_slam.png'
-            }
-        ],
-        dodge: {
-            name: 'Lariat',
-            successRate: 0.4,
-            cost: { physical: 2 },
-            cooldown: 3,
-            description: 'Powers through the attack with sheer mass.',
-            iconUrl: '/assets/techniques/gigantic_slam.png'
-        }
-    },
-    {
-        id: 'cooler',
-        tier: 2,
-        name: 'Cooler',
-        maxHp: 950,
-        stats: { attack: 85, defense: 70, speed: 80 },
-        imageColor: '#581c87',
-        portraitUrl: '/assets/characters/cooler.png',
-        techniques: [
-            {
-                id: 'supernova',
-                name: 'Supernova',
-                cost: { ki: 3, special: 2 },
-                damage: 300,
-                cooldown: 4,
-                effect: 'none',
-                description: 'A massive sun-like sphere of energy.',
-                iconUrl: '/assets/techniques/supernova.png'
-            },
-            {
-                id: 'death_chaser',
-                name: 'Death Chaser',
-                cost: { physical: 2, ki: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'A ruthless physical combo.',
-                iconUrl: '/assets/techniques/death_chaser.png'
-            },
-            {
-                id: 'eye_laser',
-                name: 'Eye Laser',
-                cost: { ki: 1 },
-                damage: 80,
-                cooldown: 1,
-                effect: 'pierce',
-                description: 'Quick precision lasers from the eyes.',
-                iconUrl: '/assets/techniques/eye_laser.png'
-            }
-        ],
-        dodge: {
-            name: 'Instant Counter',
-            successRate: 0.7,
-            cost: { special: 1, physical: 1 },
-            cooldown: 2,
-            description: 'Dodges and attempts to retaliate.',
-            iconUrl: '/assets/techniques/death_chaser.png'
-        }
-    },
-    {
-        id: 'raditz',
-        tier: 1,
-        name: 'Raditz',
-        maxHp: 750,
-        stats: { attack: 65, defense: 60, speed: 70 },
-        imageColor: '#1e3a8a',
-        portraitUrl: '/assets/characters/raditz.png',
-        techniques: [
-            {
-                id: 'double_sunday',
-                name: 'Double Sunday',
-                cost: { ki: 2 },
-                damage: 130,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Fires two beams from both hands.',
-                iconUrl: '/assets/techniques/double_sunday.png'
-            },
-            {
-                id: 'saturday_crash',
-                name: 'Saturday Crash',
-                cost: { ki: 1, special: 1 },
-                damage: 140,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'A paralyzing sphere of energy.',
-                iconUrl: '/assets/techniques/saturday_crash.png'
-            },
-            {
-                id: 'cowardly_strike',
-                name: 'Cowardly Strike',
-                cost: { physical: 2 },
-                damage: 110,
-                cooldown: 1,
-                effect: 'weaken',
-                description: 'A cheap shot.',
-                iconUrl: '/assets/techniques/cowardly_strike.png'
-            }
-        ],
-        dodge: {
-            name: 'Look Over There!',
-            successRate: 0.8,
-            cost: { special: 1 },
-            cooldown: 3,
-            description: 'Distracts the opponent to evade.',
-            iconUrl: '/assets/techniques/cowardly_strike.png'
-        }
-    },
-    {
-        id: 'nappa',
-        tier: 1,
-        name: 'Nappa',
-        maxHp: 950,
-        stats: { attack: 75, defense: 75, speed: 50 },
-        imageColor: '#ca8a04',
-        portraitUrl: '/assets/characters/nappa.png',
-        techniques: [
-            {
-                id: 'giant_storm',
-                name: 'Giant Storm',
-                cost: { ki: 3 },
-                damage: 220,
-                cooldown: 3,
-                effect: 'none',
-                description: 'Raises two fingers to cause a huge explosion.',
-                iconUrl: '/assets/techniques/giant_storm.png'
-            },
-            {
-                id: 'break_cannon',
-                name: 'Break Cannon',
-                cost: { ki: 2, physical: 1 },
-                damage: 190,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'Fires a beam from the mouth.',
-                iconUrl: '/assets/techniques/break_cannon.png'
-            },
-            {
-                id: 'bomber_dx',
-                name: 'Bomber DX',
-                cost: { ki: 2 },
-                damage: 150,
-                cooldown: 1,
-                effect: 'none',
-                description: 'A massive blast of energy.',
-                iconUrl: '/assets/techniques/bomber_dx.png'
-            }
-        ],
-        dodge: {
-            name: 'Tough Skin',
-            successRate: 0.4,
-            cost: { physical: 1 },
-            cooldown: 1,
-            description: 'Flexes muscles to absorb impact.',
-            iconUrl: '/assets/techniques/giant_storm.png'
-        }
-    },
-    {
-        id: 'ginyu',
-        tier: 1,
-        name: 'Captain Ginyu',
-        maxHp: 850,
-        stats: { attack: 75, defense: 70, speed: 75 },
-        imageColor: '#7e22ce',
-        portraitUrl: '/assets/characters/ginyu.png',
-        techniques: [
-            {
-                id: 'milky_cannon',
-                name: 'Milky Cannon',
-                cost: { ki: 2, physical: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A powerful purple blast.',
-                iconUrl: '/assets/techniques/milky_cannon.png'
-            },
-            {
-                id: 'pose',
-                name: 'Ginyu Pose',
-                cost: { special: 2 },
-                damage: 0,
-                cooldown: 3,
-                effect: 'buff',
-                description: 'Poses to drastically increase stats.',
-                iconUrl: '/assets/techniques/pose.png'
-            },
-            {
-                id: 'body_change',
-                name: 'Body Change',
-                cost: { special: 3 },
-                damage: 200,
-                cooldown: 5,
-                effect: 'stun',
-                description: 'A risky maneuver that heavily damages and stuns.',
-                iconUrl: '/assets/techniques/body_change.png'
-            }
-        ],
-        dodge: {
-            name: 'Ginyu Force Rules',
-            successRate: 0.6,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Performs a weird dance to dodge.',
-            iconUrl: '/assets/techniques/pose.png'
-        }
-    },
-    {
-        id: 'recoome',
-        tier: 1,
-        name: 'Recoome',
-        maxHp: 1000,
-        stats: { attack: 80, defense: 80, speed: 40 },
-        imageColor: '#ea580c',
-        portraitUrl: '/assets/characters/recoome.png',
-        techniques: [
-            {
-                id: 'recoome_eraser_gun',
-                name: 'Recoome Eraser Gun',
-                cost: { ki: 3 },
-                damage: 240,
-                cooldown: 3,
-                effect: 'none',
-                description: 'Massive blast from the mouth.',
-                iconUrl: '/assets/techniques/recoome_eraser_gun.png'
-            },
-            {
-                id: 'recoome_kick',
-                name: 'Recoome Kick',
-                cost: { physical: 2 },
-                damage: 160,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'A devastating flying knee.',
-                iconUrl: '/assets/techniques/recoome_kick.png'
-            },
-            {
-                id: 'recoome_mach_punch',
-                name: 'Recoome Mach Punch',
-                cost: { physical: 3 },
-                damage: 200,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'A relentless barrage of punches.',
-                iconUrl: '/assets/techniques/recoome_mach_punch.png'
-            }
-        ],
-        dodge: {
-            name: 'Recoome Pose',
-            successRate: 0.5,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Strikes a pose to ignore damage.',
-            iconUrl: '/assets/techniques/pose.png'
-        }
-    },
-    {
-        id: 'burter',
-        tier: 1,
-        name: 'Burter',
-        maxHp: 800,
-        stats: { attack: 65, defense: 50, speed: 95 },
-        imageColor: '#2563eb',
-        portraitUrl: '/assets/characters/burter.png',
-        techniques: [
-            {
-                id: 'blue_hurricane',
-                name: 'Blue Hurricane',
-                cost: { physical: 2, ki: 1 },
-                damage: 170,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Spins rapidly to create a vortex.',
-                iconUrl: '/assets/techniques/blue_hurricane.png'
-            },
-            {
-                id: 'mach_kick',
-                name: 'Mach Kick',
-                cost: { physical: 2 },
-                damage: 140,
-                cooldown: 1,
-                effect: 'none',
-                description: 'Fastest kick in the universe.',
-                iconUrl: '/assets/techniques/mach_kick.png'
-            },
-            {
-                id: 'space_mach_attack',
-                name: 'Space Mach Attack',
-                cost: { ki: 2, special: 1 },
-                damage: 210,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Blinds the enemy with speed.',
-                iconUrl: '/assets/techniques/space_mach_attack.png'
-            }
-        ],
-        dodge: {
-            name: 'Blue Blur',
-            successRate: 0.9,
-            cost: { ki: 1 },
-            cooldown: 1,
-            description: 'Moves faster than the eye can see.',
-            iconUrl: '/assets/techniques/mach_kick.png'
-        }
-    },
-    {
-        id: 'jeice',
-        tier: 1,
-        name: 'Jeice',
-        maxHp: 800,
-        stats: { attack: 70, defense: 60, speed: 80 },
-        imageColor: '#dc2626',
-        portraitUrl: '/assets/characters/jeice.png',
-        techniques: [
-            {
-                id: 'crusher_ball',
-                name: 'Crusher Ball',
-                cost: { ki: 3 },
-                damage: 200,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A red sphere of intense energy.',
-                iconUrl: '/assets/techniques/crusher_ball.png'
-            },
-            {
-                id: 'fire_crusher',
-                name: 'Fire Crusher',
-                cost: { ki: 2, physical: 1 },
-                damage: 170,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Combines ki attacks with physical strikes.',
-                iconUrl: '/assets/techniques/fire_crusher.png'
-            },
-            {
-                id: 'red_magma',
-                name: 'Red Magma',
-                cost: { special: 2 },
-                damage: 120,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'Burns the opponent, weakening them.',
-                iconUrl: '/assets/techniques/red_magma.png'
-            }
-        ],
-        dodge: {
-            name: 'Red Comet',
-            successRate: 0.7,
-            cost: { physical: 1 },
-            cooldown: 2,
-            description: 'Leaves a red trail while evading.',
-            iconUrl: '/assets/techniques/crusher_ball.png'
-        }
-    },
-    {
-        id: 'guldo',
-        tier: 1,
-        name: 'Guldo',
-        maxHp: 650,
-        stats: { attack: 50, defense: 50, speed: 40 },
-        imageColor: '#65a30d',
-        portraitUrl: '/assets/characters/guldo.png',
-        techniques: [
-            {
-                id: 'time_freeze',
-                name: 'Time Freeze',
-                cost: { special: 3 },
-                damage: 50,
-                cooldown: 5,
-                effect: 'stun',
-                description: 'Holds breath to freeze time.',
-                iconUrl: '/assets/techniques/time_freeze.png'
-            },
-            {
-                id: 'telekinesis_tree',
-                name: 'Telekinesis (Tree)',
-                cost: { special: 2 },
-                damage: 120,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'Throws a tree at the opponent.',
-                iconUrl: '/assets/techniques/telekinesis_tree.png'
-            },
-            {
-                id: 'mind_bind',
-                name: 'Mind Bind',
-                cost: { special: 1, ki: 1 },
-                damage: 80,
-                cooldown: 3,
-                effect: 'weaken',
-                description: 'Paralyzes the opponent.',
-                iconUrl: '/assets/techniques/mind_bind.png'
-            }
-        ],
-        dodge: {
-            name: 'Hold Breath',
-            successRate: 0.95,
-            cost: { special: 2 },
-            cooldown: 4,
-            description: 'Freezes time to walk out of the way.',
-            iconUrl: '/assets/techniques/time_freeze.png'
-        }
-    },
-    {
-        id: 'zarbon',
-        tier: 1,
-        name: 'Zarbon',
-        maxHp: 850,
-        stats: { attack: 75, defense: 65, speed: 80 },
-        imageColor: '#0ea5e9',
-        portraitUrl: '/assets/characters/zarbon.png',
-        techniques: [
-            {
-                id: 'elegant_blaster',
-                name: 'Elegant Blaster',
-                cost: { ki: 2 },
-                damage: 140,
-                cooldown: 1,
-                effect: 'none',
-                description: 'A refined energy wave.',
-                iconUrl: '/assets/techniques/elegant_blaster.png'
-            },
-            {
-                id: 'monster_crush',
-                name: 'Monster Crush',
-                cost: { physical: 3 },
-                damage: 210,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Uses monster form for a brutal slam.',
-                iconUrl: '/assets/techniques/monster_crush.png'
-            },
-            {
-                id: 'shooting_star',
-                name: 'Shooting Star',
-                cost: { ki: 1, physical: 1 },
-                damage: 130,
-                cooldown: 2,
-                effect: 'weaken',
-                description: 'A quick dive kick.',
-                iconUrl: '/assets/techniques/shooting_star.png'
-            }
-        ],
-        dodge: {
-            name: 'Graceful Evade',
-            successRate: 0.7,
-            cost: { ki: 1 },
-            cooldown: 1,
-            description: 'Dodges with elegance.',
-            iconUrl: '/assets/techniques/elegant_blaster.png'
-        }
-    },
-    {
-        id: 'dodoria',
-        tier: 1,
-        name: 'Dodoria',
-        maxHp: 900,
-        stats: { attack: 80, defense: 75, speed: 60 },
-        imageColor: '#be123c',
-        portraitUrl: '/assets/characters/dodoria.png',
-        techniques: [
-            {
-                id: 'dodoria_beam',
-                name: 'Dodoria Beam',
-                cost: { ki: 2, special: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'none',
-                description: 'A blast from the mouth.',
-                iconUrl: '/assets/techniques/dodoria_beam.png'
-            },
-            {
-                id: 'ruthless_blow',
-                name: 'Ruthless Blow',
-                cost: { physical: 2 },
-                damage: 150,
-                cooldown: 1,
-                effect: 'pierce',
-                description: 'A savage punch.',
-                iconUrl: '/assets/techniques/ruthless_blow.png'
-            },
-            {
-                id: 'maximum_buster',
-                name: 'Maximum Buster',
-                cost: { ki: 3 },
-                damage: 220,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'A massive wave of energy.',
-                iconUrl: '/assets/techniques/maximum_buster.png'
-            }
-        ],
-        dodge: {
-            name: 'Thick Hide',
-            successRate: 0.4,
-            cost: { physical: 1 },
-            cooldown: 1,
-            description: 'Relies on fat to absorb the blow.',
-            iconUrl: '/assets/techniques/ruthless_blow.png'
-        }
-    },
-    {
-        id: 'dabra',
-        tier: 2,
-        name: 'Dabura',
-        maxHp: 950,
-        stats: { attack: 85, defense: 70, speed: 75 },
-        imageColor: '#db2777',
-        portraitUrl: '/assets/characters/dabra.png',
-        techniques: [
-            {
-                id: 'stone_spit',
-                name: 'Stone Spit',
-                cost: { special: 3 },
-                damage: 100,
-                cooldown: 5,
-                effect: 'stun',
-                description: 'Turns the opponent to stone.',
-                iconUrl: '/assets/techniques/stone_spit.png'
-            },
-            {
-                id: 'evil_flame',
-                name: 'Evil Flame',
-                cost: { ki: 2, special: 1 },
-                damage: 180,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Breathes demonic fire.',
-                iconUrl: '/assets/techniques/evil_flame.png'
-            },
-            {
-                id: 'dark_sword',
-                name: 'Darkness Sword Attack',
-                cost: { physical: 2, ki: 1 },
-                damage: 190,
-                cooldown: 2,
-                effect: 'pierce',
-                description: 'Slashes with a conjured sword.',
-                iconUrl: '/assets/techniques/dark_sword.png'
-            }
-        ],
-        dodge: {
-            name: 'Magic Materialization',
-            successRate: 0.65,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Evades using demonic magic.',
-            iconUrl: '/assets/techniques/dark_sword.png'
-        }
-    },
-    {
-        id: 'gotenks',
-        tier: 3,
-        name: 'Gotenks',
-        maxHp: 900,
-        stats: { attack: 85, defense: 60, speed: 90 },
-        imageColor: '#fcd34d',
-        portraitUrl: '/assets/characters/gotenks.png',
-        techniques: [
-            {
-                id: 'galactic_donut',
-                name: 'Galactic Donut',
-                cost: { special: 2 },
-                damage: 120,
-                cooldown: 3,
-                effect: 'stun',
-                description: 'Traps opponent in a ring of ki.',
-                iconUrl: '/assets/techniques/galactic_donut.png'
-            },
-            {
-                id: 'super_ghost_kamikaze',
-                name: 'Super Ghost Kamikaze',
-                cost: { ki: 3, special: 1 },
-                damage: 250,
-                cooldown: 4,
-                effect: 'pierce',
-                description: 'Explosive ghosts track the enemy.',
-                iconUrl: '/assets/techniques/super_ghost_kamikaze.png'
-            },
-            {
-                id: 'continuous_die_die',
-                name: 'Continuous Die Die',
-                cost: { ki: 2, physical: 2 },
-                damage: 220,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A rapid barrage of ki blasts.',
-                iconUrl: '/assets/techniques/continuous_die_die.png'
-            }
-        ],
-        dodge: {
-            name: 'Childish Evasion',
-            successRate: 0.85,
-            cost: { physical: 1 },
-            cooldown: 2,
-            description: 'Unpredictable movements.',
-            iconUrl: '/assets/techniques/galactic_donut.png'
-        }
-    },
-    {
-        id: 'vegito',
-        tier: 3,
-        name: 'Vegito',
-        maxHp: 1200,
-        stats: { attack: 95, defense: 85, speed: 90 },
-        imageColor: '#1d4ed8',
-        portraitUrl: '/assets/characters/vegito.png',
-        techniques: [
-            {
-                id: 'spirit_sword',
-                name: 'Spirit Sword',
-                cost: { ki: 2, physical: 2 },
-                damage: 260,
-                cooldown: 3,
-                effect: 'pierce',
-                description: 'Impales the opponent with a sword of light.',
-                iconUrl: '/assets/techniques/spirit_sword.png'
-            },
-            {
-                id: 'final_kamehameha',
-                name: 'Final Kamehameha',
-                cost: { ki: 3, special: 2 },
-                damage: 320,
-                cooldown: 4,
-                effect: 'none',
-                description: 'The ultimate combined blast.',
-                iconUrl: '/assets/techniques/final_kamehameha.png'
-            },
-            {
-                id: 'savage_counter',
-                name: 'Savage Counter',
-                cost: { physical: 2, special: 1 },
-                damage: 200,
-                cooldown: 2,
-                effect: 'stun',
-                description: 'Taunts and kicks the opponent.',
-                iconUrl: '/assets/techniques/savage_counter.png'
-            }
-        ],
-        dodge: {
-            name: 'Absolute Confidence',
-            successRate: 0.8,
-            cost: { special: 1 },
-            cooldown: 2,
-            description: 'Dodges effortlessly.',
-            iconUrl: '/assets/techniques/spirit_sword.png'
-        }
-    },
-    {
-        id: 'gogeta',
-        tier: 3,
-        name: 'Gogeta',
-        maxHp: 1150,
-        stats: { attack: 100, defense: 75, speed: 95 },
-        imageColor: '#d97706',
-        portraitUrl: '/assets/characters/gogeta.png',
-        techniques: [
-            {
-                id: 'soul_punisher',
-                name: 'Soul Punisher',
-                cost: { ki: 2, special: 3 },
-                damage: 350,
-                cooldown: 5,
-                effect: 'pierce',
-                description: 'Disintegrates all evil.',
-                iconUrl: '/assets/techniques/soul_punisher.png'
-            },
-            {
-                id: 'big_bang_kamehameha',
-                name: 'Big Bang Kamehameha',
-                cost: { ki: 3, physical: 1 },
-                damage: 280,
-                cooldown: 3,
-                effect: 'none',
-                description: 'A devastating beam.',
-                iconUrl: '/assets/techniques/big_bang_kamehameha.png'
-            },
-            {
-                id: 'stardust_fall',
-                name: 'Stardust Fall',
-                cost: { ki: 3 },
-                damage: 230,
-                cooldown: 2,
-                effect: 'none',
-                description: 'Rains down explosive ki.',
-                iconUrl: '/assets/techniques/stardust_fall.png'
-            }
-        ],
-        dodge: {
-            name: 'Blink',
-            successRate: 0.85,
-            cost: { ki: 1 },
-            cooldown: 1,
-            description: 'Moves instantaneously to evade.',
-            iconUrl: '/assets/techniques/stardust_fall.png'
-        }
-    }
 ];
-
-// (previous automatic balancing helper removed)

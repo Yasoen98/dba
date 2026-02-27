@@ -14,7 +14,7 @@ const EnergyDisplay: React.FC<{ energy: PlayerEnergy; label: string }> = ({ ener
         gap: '0.4rem',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        border: '1px solid rgba(255,255,255,0.08)'
+        border: '1px solid rgba(255,255,255,0.08)',
     }}>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}>{label}:</span>
         {Array.from({ length: energy.ki }).map((_, i) => (
@@ -53,20 +53,42 @@ const CostDisplay: React.FC<{ cost: ActionCost }> = ({ cost }) => (
     </div>
 );
 
-// ─── Effect Badge ──────────────────────────────────────────────────────────────
+// ─── Effect colors / labels ────────────────────────────────────────────────────
 const effectColors: Record<string, string> = {
-    pierce: '#f59e0b',
-    stun: '#a855f7',
-    weaken: '#ef4444',
-    buff: '#22c55e',
-    none: 'transparent',
+    pierce:  '#f59e0b',
+    stun:    '#a855f7',
+    weaken:  '#ef4444',
+    buff:    '#22c55e',
+    poison:  '#84cc16',
+    bleed:   '#dc2626',
+    regen:   '#06b6d4',
+    dodging: '#38bdf8',
+    aoe:     '#fb923c',
+    heal:    '#34d399',
+    healAll: '#10b981',
+    clear:   '#e0f2fe',
+    senzu:   '#fcd34d',
+    energy:  '#38bdf8',
+    drain:   '#8b5cf6',
+    none:    'transparent',
 };
-const effectLabels: Record<string, string> = {
-    pierce: '⚡ Pierce',
-    stun: '💫 Stun',
-    weaken: '💢 Weaken',
-    buff: '✨ Buff',
-    none: '',
+
+const effectLabel: Record<string, string> = {
+    pierce:  'PIERCE',
+    stun:    'STUN',
+    weaken:  'WEAKEN',
+    buff:    'BUFF',
+    poison:  '☠ POISON',
+    bleed:   '🩸 BLEED',
+    regen:   '💚 REGEN',
+    aoe:     '💥 AOE',
+    heal:    '💊 HEAL',
+    healAll: '✨ HEAL ALL',
+    clear:   '🧹 CLEAR',
+    senzu:   '⚡ SENZU',
+    energy:  '🔋 ENERGY',
+    drain:   '🌀 DRAIN',
+    none:    '',
 };
 
 // ─── Character Portrait ────────────────────────────────────────────────────────
@@ -91,18 +113,17 @@ const CharacterPortrait: React.FC<{
                 flexDirection: 'column',
                 alignItems: 'center',
                 opacity: isExecuting ? 0.55 : (isDead ? 0.25 : 1),
-                transform: isExecuting 
-                    ? 'scale(0.88) translateY(0px)' 
+                transform: isExecuting
+                    ? 'scale(0.88) translateY(0px)'
                     : (isSelected ? 'scale(1.12) translateY(-6px)' : 'scale(1)'),
                 transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                 cursor: !isDead && onClick ? 'pointer' : 'default',
                 width: '90px',
-                filter: isExecuting 
-                    ? 'brightness(0.7) saturate(0.6)' 
+                filter: isExecuting
+                    ? 'brightness(0.7) saturate(0.6)'
                     : (isDead ? 'grayscale(1)' : 'none'),
             }}
         >
-            {/* Portrait circle */}
             <div style={{
                 position: 'relative',
                 width: '72px',
@@ -130,10 +151,8 @@ const CharacterPortrait: React.FC<{
                 {isActiveTurn && (
                     <div style={{
                         position: 'absolute',
-                        top: -4,
-                        right: -4,
-                        width: 18,
-                        height: 18,
+                        top: -4, right: -4,
+                        width: 18, height: 18,
                         background: 'var(--accent)',
                         borderRadius: '50%',
                         border: '2px solid #fff',
@@ -143,12 +162,13 @@ const CharacterPortrait: React.FC<{
                 )}
             </div>
 
-            {/* Name */}
             <div style={{
                 marginTop: '0.35rem',
                 fontWeight: 700,
                 fontSize: '0.72rem',
-                color: isSelected ? (isOpponent ? 'var(--physical-color)' : 'var(--ki-color)') : '#ddd',
+                color: isSelected
+                    ? (isOpponent ? 'var(--physical-color)' : 'var(--ki-color)')
+                    : '#ddd',
                 textShadow: '0 1px 3px rgba(0,0,0,0.9)',
                 textAlign: 'center',
                 maxWidth: '88px',
@@ -159,7 +179,6 @@ const CharacterPortrait: React.FC<{
                 {char.name}
             </div>
 
-            {/* HP Bar */}
             <div style={{
                 width: '100%',
                 height: '6px',
@@ -181,19 +200,19 @@ const CharacterPortrait: React.FC<{
                 {Math.floor(char.currentHp)}/{char.maxHp}
             </span>
 
-            {/* Status effects */}
             <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', justifyContent: 'center', minHeight: '18px', marginTop: '3px' }}>
                 {char.statusEffects.map((e, i) => (
                     <span key={i} style={{
-                        fontSize: '0.6rem',
+                        fontSize: '0.58rem',
                         color: effectColors[e.effect] || '#fff',
-                        background: 'rgba(0,0,0,0.7)',
+                        background: 'rgba(0,0,0,0.75)',
                         padding: '1px 4px',
                         borderRadius: '4px',
-                        border: `1px solid ${effectColors[e.effect] || '#555'}`,
+                        border: `1px solid ${effectColors[e.effect] || '#555'}55`,
                         fontWeight: 700,
+                        letterSpacing: '0.3px',
                     }}>
-                        {e.effect.toUpperCase()}
+                        {effectLabel[e.effect] || e.effect.toUpperCase()} {e.duration > 0 ? `(${e.duration})` : ''}
                     </span>
                 ))}
             </div>
@@ -213,142 +232,78 @@ const ActionButton: React.FC<{
     effect?: string;
     onClick: () => void;
     tooltip?: string;
-}> = ({ iconUrl, name, subLabel, cost, disabled, isActive, accentColor = 'rgba(255,255,255,0.08)', effect, onClick, tooltip }) => {
-    const [hovered, setHovered] = useState(false);
-
-    return (
-        <div style={{ position: 'relative' }}>
-            <button
-                disabled={disabled}
-                onClick={onClick}
-                onMouseEnter={() => setHovered(true)}
-                onMouseLeave={() => setHovered(false)}
+}> = ({ iconUrl, name, subLabel, cost, disabled, accentColor = 'var(--ki-color)', effect, onClick, tooltip }) => (
+    <button
+        onClick={!disabled ? onClick : undefined}
+        disabled={disabled}
+        title={tooltip}
+        style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.5rem 0.35rem',
+            background: disabled ? 'rgba(20,25,40,0.6)' : `linear-gradient(135deg, rgba(15,23,42,0.95), rgba(20,30,50,0.9))`,
+            border: `1px solid ${disabled ? 'rgba(255,255,255,0.06)' : accentColor + '55'}`,
+            borderRadius: '10px',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.45 : 1,
+            transition: 'all 0.2s ease',
+            boxShadow: disabled ? 'none' : `0 0 10px ${accentColor}22, inset 0 1px 0 rgba(255,255,255,0.05)`,
+            minHeight: '90px',
+        }}
+    >
+        {iconUrl && (
+            <img
+                src={iconUrl}
+                alt={name}
                 style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    padding: '0.6rem 0.4rem',
-                    background: isActive
-                        ? `linear-gradient(135deg, ${accentColor}, rgba(255,255,255,0.12))`
-                        : 'rgba(255,255,255,0.04)',
-                    border: isActive
-                        ? `2px solid ${accentColor}`
-                        : '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                    opacity: disabled ? 0.45 : 1,
-                    transition: 'all 0.2s ease',
-                    width: '100%',
-                    minHeight: '110px',
-                    boxShadow: isActive ? `0 0 14px ${accentColor}88` : 'none',
-                    transform: (!disabled && hovered) ? 'translateY(-3px)' : 'none',
-                    color: '#fff',
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Icon */}
-                {iconUrl ? (
-                    <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '10px',
-                        backgroundImage: `url(${iconUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        border: '2px solid rgba(255,255,255,0.15)',
-                        boxShadow: '0 3px 10px rgba(0,0,0,0.6)',
-                        marginBottom: '0.4rem',
-                        flexShrink: 0,
-                    }} />
-                ) : (
-                    <div style={{
-                        width: '52px',
-                        height: '52px',
-                        borderRadius: '10px',
-                        background: 'rgba(255,255,255,0.1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: '0.4rem',
-                        fontSize: '1.4rem',
-                    }}>
-                        🌀
-                    </div>
-                )}
-
-                {/* Name */}
-                <div style={{
-                    fontWeight: 700,
-                    fontSize: '0.72rem',
-                    textAlign: 'center',
-                    lineHeight: 1.2,
-                    marginBottom: '0.2rem',
-                    maxWidth: '100%',
-                }}>
-                    {name}
-                </div>
-
-                {/* Sub-label (damage / cooldown / rate) */}
-                <div style={{
-                    fontSize: '0.65rem',
-                    color: 'var(--text-muted)',
-                    marginBottom: '0.2rem',
-                    textAlign: 'center',
-                }}>
-                    {subLabel}
-                </div>
-
-                {/* Effect badge */}
-                {effect && effect !== 'none' && (
-                    <div style={{
-                        fontSize: '0.58rem',
-                        color: effectColors[effect],
-                        fontWeight: 700,
-                        marginBottom: '0.2rem',
-                    }}>
-                        {effectLabels[effect]}
-                    </div>
-                )}
-
-                {/* Cost pills */}
-                <CostDisplay cost={cost} />
-            </button>
-
-            {/* Tooltip */}
-            {hovered && tooltip && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '100%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: 'rgba(10,10,20,0.95)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    width: '36px',
+                    height: '36px',
                     borderRadius: '8px',
-                    padding: '0.5rem 0.75rem',
-                    fontSize: '0.75rem',
-                    color: '#ddd',
-                    zIndex: 100,
-                    pointerEvents: 'none',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.7)',
-                    marginBottom: '6px',
-                    maxWidth: '200px',
-                    textAlign: 'center',
-                    wordBreak: 'break-word',
-                }}>
-                    {tooltip}
-                </div>
-            )}
+                    objectFit: 'cover',
+                    border: `1px solid ${accentColor}44`,
+                    marginBottom: '3px',
+                }}
+            />
+        )}
+        <div style={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            color: disabled ? '#555' : '#e2e8f0',
+            textAlign: 'center',
+            lineHeight: 1.2,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+        }}>
+            {name}
         </div>
-    );
-};
+        <div style={{ fontSize: '0.6rem', color: disabled ? '#444' : accentColor, fontWeight: 600 }}>
+            {subLabel}
+        </div>
+        <CostDisplay cost={cost} />
+        {effect && effect !== 'none' && (
+            <div style={{
+                fontSize: '0.55rem',
+                color: effectColors[effect] || '#888',
+                fontWeight: 700,
+                marginTop: '2px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+            }}>
+                {effectLabel[effect] || effect}
+            </div>
+        )}
+    </button>
+);
 
-// ─── Last Action Flash ─────────────────────────────────────────────────────────
-const LastActionFlash: React.FC<{ iconUrl?: string; name: string; visible: boolean }> = ({ iconUrl, name, visible }) => (
+// ─── Flash overlay ─────────────────────────────────────────────────────────────
+const FlashOverlay: React.FC<{ iconUrl?: string; name: string; visible: boolean }> = ({ iconUrl, name, visible }) => (
     <div style={{
         position: 'fixed',
-        top: '50%',
-        left: '50%',
+        top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         zIndex: 200,
         display: 'flex',
@@ -393,7 +348,8 @@ export const BattleArena: React.FC = () => {
         playerActiveIndex, opponentActiveIndex,
         playerEnergy, opponentEnergy,
         turnNumber, isPlayerTurn,
-        combatLogs, executePlayerAction, endTurn, setPlayerActiveIndex,
+        // FIX #7: passTurn zamiast endTurn w UI (endTurn to metoda wewnętrzna)
+        combatLogs, executePlayerAction, passTurn, setPlayerActiveIndex,
         surrender, winner, setOpponentActiveIndex, playerActionsUsed,
         playerName,
     } = useGameState();
@@ -405,25 +361,21 @@ export const BattleArena: React.FC = () => {
     const [executingPlayerIndices, setExecutingPlayerIndices] = useState<number[]>([]);
     const [executingOpponentIndices, setExecutingOpponentIndices] = useState<number[]>([]);
 
-    // Auto-scroll combat log
     useEffect(() => {
         if (logsRef.current) {
             logsRef.current.scrollTop = 0;
         }
     }, [combatLogs]);
 
-    // Flash animation when new log entry arrives
     useEffect(() => {
         if (combatLogs.length === 0) return;
         const latest = combatLogs[0];
         if (latest.playerName === 'System') return;
 
-        // Find icon for the action
         const roster = latest.isOpponent ? opponentRoster : playerRoster;
         const char = roster.find(c => c.name === latest.characterName);
         if (!char) return;
 
-        // Apply executing effect to character (allow multiple executing characters)
         if (latest.isOpponent) {
             const opIndex = opponentRoster.findIndex(c => c.name === latest.characterName);
             if (opIndex !== -1) setExecutingOpponentIndices(prev => prev.includes(opIndex) ? prev : [...prev, opIndex]);
@@ -439,13 +391,10 @@ export const BattleArena: React.FC = () => {
             setFlashAction({ iconUrl, name: latest.action });
             setFlashVisible(true);
             const timer = setTimeout(() => setFlashVisible(false), 900);
-            return () => {
-                clearTimeout(timer);
-            };
+            return () => clearTimeout(timer);
         }
     }, [combatLogs]);
 
-    // Clear executing character effects when round ends
     useEffect(() => {
         setExecutingPlayerIndices([]);
         setExecutingOpponentIndices([]);
@@ -453,7 +402,6 @@ export const BattleArena: React.FC = () => {
 
     const pActive = playerRoster[playerActiveIndex];
 
-    // affordability helper with universal energy substitution
     const canAfford = (cost: ActionCost) => {
         const needKi = cost.ki || 0;
         const needPh = cost.physical || 0;
@@ -465,133 +413,203 @@ export const BattleArena: React.FC = () => {
         let availSp = playerEnergy.special;
         let availUniversal = playerEnergy.universal || 0;
 
-        // Try to satisfy specific requirements, using universal as fallback
-        if (availKi < needKi) {
-            const shortfall = needKi - availKi;
-            if (availUniversal < shortfall) return false;
-            availUniversal -= shortfall;
-        }
-        if (availPh < needPh) {
-            const shortfall = needPh - availPh;
-            if (availUniversal < shortfall) return false;
-            availUniversal -= shortfall;
-        }
-        if (availSp < needSp) {
-            const shortfall = needSp - availSp;
-            if (availUniversal < shortfall) return false;
-            availUniversal -= shortfall;
-        }
+        if (availKi < needKi) { const s = needKi - availKi; if (availUniversal < s) return false; availUniversal -= s; }
+        if (availPh < needPh) { const s = needPh - availPh; if (availUniversal < s) return false; availUniversal -= s; }
+        if (availSp < needSp) { const s = needSp - availSp; if (availUniversal < s) return false; availUniversal -= s; }
         if (needAny > availUniversal) return false;
-
         return true;
     };
 
+    if (!pActive) return null;
 
     return (
-        <>
-            {/* Flash overlay */}
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100vh',
+            maxHeight: '100vh',
+            overflow: 'hidden',
+            padding: '0.5rem',
+            gap: '0.5rem',
+            background: 'var(--bg-main)',
+        }}>
             {flashAction && (
-                <LastActionFlash
-                    iconUrl={flashAction.iconUrl}
-                    name={flashAction.name}
-                    visible={flashVisible}
-                />
+                <FlashOverlay iconUrl={flashAction.iconUrl} name={flashAction.name} visible={flashVisible} />
             )}
 
-            <div style={{
-                display: 'grid',
-                gridTemplateRows: 'auto auto 1fr auto',
-                height: '100vh',
-                maxWidth: '1100px',
-                margin: '0 auto',
-                padding: '0.75rem',
-                gap: '0.5rem',
-                boxSizing: 'border-box',
+            {/* ── TOP: Opponent row ── */}
+            <div className="glass-panel" style={{
+                padding: '0.75rem 1rem',
+                background: 'rgba(239,68,68,0.04)',
+                borderColor: 'rgba(239,68,68,0.2)',
             }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--physical-color)', boxShadow: '0 0 8px var(--physical-color)' }} />
+                        <span style={{ fontWeight: 700, color: 'var(--physical-color)', fontSize: '0.9rem' }}>Bot Opponent</span>
+                    </div>
+                    <EnergyDisplay energy={opponentEnergy} label="Energy" />
+                </div>
+                <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
+                    {opponentRoster.map((c, i) => (
+                        <CharacterPortrait
+                            key={c.id}
+                            char={c}
+                            isSelected={i === opponentActiveIndex}
+                            isActiveTurn={!isPlayerTurn && i === opponentActiveIndex}
+                            isExecuting={executingOpponentIndices.includes(i)}
+                            isOpponent
+                            onClick={() => isPlayerTurn && setOpponentActiveIndex(i)}
+                        />
+                    ))}
+                </div>
+            </div>
 
-                {/* ── TOP: Opponent row ── */}
+            {/* ── MIDDLE: Turn info + Combat log ── */}
+            <div className="glass-panel" style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                alignItems: 'center',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{
+                        background: isPlayerTurn
+                            ? 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(56,189,248,0.05))'
+                            : 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05))',
+                        border: `1px solid ${isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)'}`,
+                        borderRadius: '10px',
+                        padding: '0.4rem 1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                    }}>
+                        <div style={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)',
+                            animation: 'pulse 1s infinite',
+                            boxShadow: `0 0 6px ${isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)'}`,
+                        }} />
+                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)' }}>
+                            {isPlayerTurn ? `${playerName || 'Your'} Turn` : 'Opponent Turn'}
+                        </span>
+                    </div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Round {turnNumber}</span>
+                </div>
+
+                <button
+                    onClick={() => setShowSurrenderConfirm(true)}
+                    disabled={!!winner || !isPlayerTurn}
+                    style={{
+                        padding: '0.35rem 0.8rem',
+                        background: 'rgba(239,68,68,0.1)',
+                        border: '1px solid rgba(239,68,68,0.3)',
+                        color: 'rgba(239,68,68,0.8)',
+                        borderRadius: '6px',
+                        fontSize: '0.7rem',
+                        cursor: (winner || !isPlayerTurn) ? 'not-allowed' : 'pointer',
+                        opacity: (winner || !isPlayerTurn) ? 0.4 : 1,
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                    }}
+                >
+                    Surrender
+                </button>
+            </div>
+
+            {/* ── COMBAT LOG ── */}
+            <div
+                ref={logsRef}
+                className="glass-panel"
+                style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '0.75rem 1rem',
+                    maxHeight: '180px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                }}
+            >
+                {combatLogs.map(log => (
+                    <div key={log.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: '40px', flexShrink: 0 }}>
+                            R{log.turn}
+                        </span>
+                        <div>
+                            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                <strong style={{
+                                    color: log.playerName === 'System'
+                                        ? 'var(--accent)'
+                                        : log.isOpponent ? 'var(--physical-color)' : 'var(--ki-color)',
+                                }}>{log.playerName}</strong>
+                                {log.characterName ? ` (${log.characterName})` : ''}
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: '#e2e8f0' }}>{log.details}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* ── BOTTOM: Player row + Actions ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div className="glass-panel" style={{
                     padding: '0.75rem 1rem',
-                    background: 'rgba(239,68,68,0.04)',
-                    borderColor: 'rgba(239,68,68,0.2)',
+                    background: 'rgba(56,189,248,0.04)',
+                    borderColor: 'rgba(56,189,248,0.2)',
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{
-                                width: 10, height: 10, borderRadius: '50%',
-                                background: 'var(--physical-color)',
-                                boxShadow: '0 0 8px var(--physical-color)',
-                            }} />
-                            <span style={{ fontWeight: 700, color: 'var(--physical-color)', fontSize: '0.9rem' }}>
-                                Bot Opponent
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--ki-color)', boxShadow: '0 0 8px var(--ki-color)' }} />
+                            <span style={{ fontWeight: 700, color: 'var(--ki-color)', fontSize: '0.9rem' }}>
+                                {playerName || 'You'}
                             </span>
                         </div>
-                        <EnergyDisplay energy={opponentEnergy} label="Energy" />
+                        <EnergyDisplay energy={playerEnergy} label="Energy" />
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
-                        {opponentRoster.map((c, i) => (
+                        {playerRoster.map((c, i) => (
                             <CharacterPortrait
                                 key={c.id}
                                 char={c}
-                                isSelected={i === opponentActiveIndex}
-                                isActiveTurn={!isPlayerTurn && i === opponentActiveIndex}
-                                   isExecuting={executingOpponentIndices.includes(i)}
-                                isOpponent
-                                onClick={() => isPlayerTurn && setOpponentActiveIndex(i)}
+                                isSelected={i === playerActiveIndex}
+                                isActiveTurn={isPlayerTurn && i === playerActiveIndex}
+                                isExecuting={executingPlayerIndices.includes(i)}
+                                onClick={() => isPlayerTurn && setPlayerActiveIndex(i)}
                             />
                         ))}
                     </div>
                 </div>
 
-                {/* ── MIDDLE: Turn info + Combat log ── */}
-                <div className="glass-panel" style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto',
-                    gap: '0.75rem',
-                    padding: '0.75rem 1rem',
-                    alignItems: 'center',
-                }}>
-                    {/* Turn indicator */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{
-                            background: isPlayerTurn
-                                ? 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(56,189,248,0.05))'
-                                : 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05))',
-                            border: `1px solid ${isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)'}`,
-                            borderRadius: '10px',
-                            padding: '0.4rem 1rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                        }}>
-                            <div style={{
-                                width: 8, height: 8, borderRadius: '50%',
-                                background: isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)',
-                                animation: 'pulse 1s infinite',
-                                boxShadow: `0 0 6px ${isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)'}`,
-                            }} />
-                            <span style={{
-                                fontWeight: 800,
-                                fontSize: '0.85rem',
-                                color: isPlayerTurn ? 'var(--ki-color)' : 'var(--physical-color)',
-                                letterSpacing: '1px',
-                                textTransform: 'uppercase',
-                            }}>
-                                {isPlayerTurn ? 'Your Turn' : "Opponent's Turn"}
-                            </span>
-                        </div>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            Round <strong style={{ color: 'var(--accent)' }}>{turnNumber}</strong>
+                {/* Action bar */}
+                <div className="glass-panel" style={{ padding: '0.75rem', background: 'rgba(10,15,30,0.92)' }}>
+                    <div style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        marginBottom: '0.5rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}>
+                        <span>
+                            Actions for{' '}
+                            <strong style={{ color: pActive.imageColor }}>{pActive.name}</strong>
+                            {!isPlayerTurn && (
+                                <span style={{ color: 'var(--physical-color)', marginLeft: '0.5rem' }}>
+                                    (Waiting for opponent...)
+                                </span>
+                            )}
                         </span>
                         {isPlayerTurn && (
+                            // FIX #7: passTurn zamiast endTurn — poprawnie loguje "passed" dla każdej postaci
                             <button
-                                onClick={() => setShowSurrenderConfirm(true)}
+                                onClick={passTurn}
                                 disabled={!!winner}
                                 style={{
-                                    marginLeft: 'auto',
                                     padding: '0.35rem 0.8rem',
-                                    background: winner ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.35)',
-                                    border: '1px solid rgba(239,68,68,0.5)',
+                                    background: 'rgba(59,130,246,0.35)',
+                                    border: '1px solid rgba(59,130,246,0.5)',
                                     color: '#fff',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -600,336 +618,135 @@ export const BattleArena: React.FC = () => {
                                     opacity: winner ? 0.5 : 1,
                                     transition: 'all 0.2s ease',
                                 }}
-                                title="Surrender and concede the battle"
+                                title="Pass remaining actions and end round"
                             >
-                                Surrender
+                                End Round
                             </button>
                         )}
                     </div>
 
-                    {/* Latest log entry preview */}
-                    {combatLogs.length > 0 && combatLogs[0].playerName !== 'System' && (
-                        <div style={{
-                            fontSize: '0.78rem',
-                            color: combatLogs[0].isOpponent ? 'var(--physical-color)' : 'var(--ki-color)',
-                            maxWidth: '300px',
-                            textAlign: 'right',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}>
-                            {combatLogs[0].details}
-                        </div>
-                    )}
-                </div>
-
-                {/* ── COMBAT LOG ── */}
-                <div className="glass-panel" style={{
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '0.75rem',
-                }}>
                     <div style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-muted)',
-                        marginBottom: '0.4rem',
-                        borderBottom: '1px solid rgba(255,255,255,0.07)',
-                        paddingBottom: '0.4rem',
-                        fontWeight: 700,
-                        letterSpacing: '1px',
-                        textTransform: 'uppercase',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '0.5rem',
+                        opacity: isPlayerTurn ? 1 : 0.5,
+                        pointerEvents: isPlayerTurn ? 'auto' : 'none',
+                        marginBottom: '0.5rem',
                     }}>
-                        Combat Log
-                    </div>
-                    <div
-                        ref={logsRef}
-                        style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.3rem',
-                        }}
-                    >
-                        {combatLogs.map((log, idx) => {
-                            // Find technique icon for this log entry
-                            const roster = log.isOpponent ? opponentRoster : playerRoster;
-                            const char = roster.find(c => c.name === log.characterName);
-                            const tech = char?.techniques.find(t => t.name === log.action);
-                            const dodgeIcon = char?.dodge.name === log.action ? char?.dodge.iconUrl : undefined;
-                            const logIcon = tech?.iconUrl ?? dodgeIcon;
-
+                        {pActive.techniques.map(tech => {
+                            const cd = pActive.cooldowns[tech.id] || 0;
+                            const isDisabled = cd > 0 || !canAfford(tech.cost) || !isPlayerTurn || !!playerActionsUsed[playerActiveIndex];
+                            const accentMap: Record<string, string> = {
+                                pierce:  '#f59e0b', stun:    '#a855f7', weaken:  '#ef4444',
+                                buff:    '#22c55e', poison:  '#84cc16', bleed:   '#dc2626',
+                                regen:   '#06b6d4', aoe:     '#fb923c', heal:    '#34d399',
+                                healAll: '#10b981', clear:   '#bae6fd', senzu:   '#fcd34d',
+                                energy:  '#38bdf8', drain:   '#8b5cf6',
+                            };
                             return (
-                                <div key={log.id} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.4rem 0.5rem',
-                                    borderRadius: '6px',
-                                    borderLeft: log.playerName === 'System'
-                                        ? '3px solid var(--accent)'
-                                        : log.isOpponent
-                                            ? '3px solid var(--physical-color)'
-                                            : '3px solid var(--ki-color)',
-                                    background: idx === 0 ? 'rgba(255,255,255,0.04)' : 'transparent',
-                                    transition: 'background 0.3s',
-                                }}>
-                                    {/* Mini icon */}
-                                    {logIcon && (
-                                        <img
-                                            src={logIcon}
-                                            alt=""
-                                            style={{
-                                                width: '28px',
-                                                height: '28px',
-                                                borderRadius: '6px',
-                                                border: '1px solid rgba(255,255,255,0.15)',
-                                                flexShrink: 0,
-                                                objectFit: 'cover',
-                                            }}
-                                        />
-                                    )}
-                                    <div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                            R{log.turn} · <strong style={{
-                                                color: log.playerName === 'System' ? 'var(--accent)' : log.isOpponent ? 'var(--physical-color)' : 'var(--ki-color)'
-                                            }}>{log.playerName}</strong>
-                                            {log.characterName ? ` (${log.characterName})` : ''}
-                                        </div>
-                                        <div style={{ fontSize: '0.82rem', color: '#e2e8f0' }}>{log.details}</div>
-                                    </div>
-                                </div>
+                                <ActionButton
+                                    key={tech.id}
+                                    iconUrl={tech.iconUrl}
+                                    name={tech.name}
+                                    subLabel={cd > 0 ? `⏳ CD: ${cd}` : tech.damage > 0 ? `💥 ${tech.damage}` : effectLabel[tech.effect] || '✦ Utility'}
+                                    cost={tech.cost}
+                                    disabled={isDisabled}
+                                    effect={tech.effect}
+                                    accentColor={accentMap[tech.effect] || 'var(--ki-color)'}
+                                    onClick={() => executePlayerAction('technique', tech.id)}
+                                    tooltip={tech.description}
+                                />
                             );
                         })}
-                    </div>
-                </div>
 
-                {/* ── BOTTOM: Player row + Actions ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-
-                    {/* Player characters */}
-                    <div className="glass-panel" style={{
-                        padding: '0.75rem 1rem',
-                        background: 'rgba(56,189,248,0.04)',
-                        borderColor: 'rgba(56,189,248,0.2)',
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{
-                                    width: 10, height: 10, borderRadius: '50%',
-                                    background: 'var(--ki-color)',
-                                    boxShadow: '0 0 8px var(--ki-color)',
-                                }} />
-                                <span style={{ fontWeight: 700, color: 'var(--ki-color)', fontSize: '0.9rem' }}>
-                                    {playerName || 'You'}
-                                </span>
-                            </div>
-                            <EnergyDisplay energy={playerEnergy} label="Energy" />
-                        </div>
-                        <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
-                            {playerRoster.map((c, i) => (
-                                <CharacterPortrait
-                                    key={c.id}
-                                    char={c}
-                                    isSelected={i === playerActiveIndex}
-                                    isActiveTurn={isPlayerTurn && i === playerActiveIndex}
-                                       isExecuting={executingPlayerIndices.includes(i)}
-                                    onClick={() => isPlayerTurn && setPlayerActiveIndex(i)}
+                        {/* FIX #4: wywołanie dodge przez stały klucz 'dodge' zamiast dodge.name */}
+                        {(() => {
+                            const dodge = pActive.dodge;
+                            const cd = pActive.cooldowns['dodge'] || 0;
+                            const isDisabled = cd > 0 || !canAfford(dodge.cost) || !isPlayerTurn || !!playerActionsUsed[playerActiveIndex];
+                            return (
+                                <ActionButton
+                                    iconUrl={dodge.iconUrl}
+                                    name={dodge.name}
+                                    subLabel={cd > 0 ? `⏳ CD: ${cd}` : `🛡 ${Math.round(dodge.successRate * 100)}% dodge`}
+                                    cost={dodge.cost}
+                                    disabled={isDisabled}
+                                    accentColor="rgba(168,85,247,0.6)"
+                                    onClick={() => executePlayerAction('dodge', 'dodge')} // FIX #4
+                                    tooltip={dodge.description}
                                 />
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Action bar */}
-                    <div className="glass-panel" style={{
-                        padding: '0.75rem',
-                        background: 'rgba(10,15,30,0.92)',
-                    }}>
-                        <div style={{
-                            fontSize: '0.75rem',
-                            color: 'var(--text-muted)',
-                            marginBottom: '0.5rem',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                        }}>
-                            <span>
-                                Actions for{' '}
-                                <strong style={{ color: pActive.imageColor }}>{pActive.name}</strong>
-                                {!isPlayerTurn && (
-                                    <span style={{ color: 'var(--physical-color)', marginLeft: '0.5rem' }}>
-                                        (Waiting for opponent...)
-                                    </span>
-                                )}
-                            </span>
-                            {isPlayerTurn && (
-                                <>
-                                    <button
-                                        onClick={endTurn}
-                                        disabled={!!winner}
-                                        style={{
-                                            padding: '0.35rem 0.8rem',
-                                            background: 'rgba(59,130,246,0.35)',
-                                            border: '1px solid rgba(59,130,246,0.5)',
-                                            color: '#fff',
-                                            borderRadius: '6px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 700,
-                                            cursor: winner ? 'not-allowed' : 'pointer',
-                                            opacity: winner ? 0.5 : 1,
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                        title="End this round and replenish energy"
-                                    >
-                                        End Round
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(4, 1fr)',
-                            gap: '0.5rem',
-                            opacity: isPlayerTurn ? 1 : 0.5,
-                            pointerEvents: isPlayerTurn ? 'auto' : 'none',
-                            marginBottom: '0.5rem',
-                        }}>
-                            {/* Technique buttons */}
-                            {pActive.techniques.map(tech => {
-                                const cd = pActive.cooldowns[tech.id] || 0;
-                                const isDisabled = cd > 0 || !canAfford(tech.cost) || !isPlayerTurn || !!playerActionsUsed[playerActiveIndex];
-
-                                return (
-                                    <ActionButton
-                                        key={tech.id}
-                                        iconUrl={tech.iconUrl}
-                                        name={tech.name}
-                                        subLabel={cd > 0 ? `⏳ CD: ${cd}` : `💥 ${tech.damage} dmg`}
-                                        cost={tech.cost}
-                                        disabled={isDisabled}
-                                        effect={tech.effect}
-                                        accentColor={
-                                            tech.effect === 'pierce' ? '#f59e0b' :
-                                            tech.effect === 'stun' ? '#a855f7' :
-                                            tech.effect === 'weaken' ? '#ef4444' :
-                                            tech.effect === 'buff' ? '#22c55e' :
-                                            'var(--ki-color)'
-                                        }
-                                        onClick={() => executePlayerAction('technique', tech.id)}
-                                        tooltip={tech.description}
-                                    />
-                                );
-                            })}
-
-                            {/* Dodge button */}
-                            {(() => {
-                                const dodge = pActive.dodge;
-                                const cd = pActive.cooldowns['dodge'] || 0;
-                                const isDisabled = cd > 0 || !canAfford(dodge.cost) || !isPlayerTurn || !!playerActionsUsed[playerActiveIndex];
-
-                                return (
-                                    <ActionButton
-                                        iconUrl={dodge.iconUrl}
-                                        name={dodge.name}
-                                        subLabel={cd > 0 ? `⏳ CD: ${cd}` : `🛡 ${Math.round(dodge.successRate * 100)}% dodge`}
-                                        cost={dodge.cost}
-                                        disabled={isDisabled}
-                                        accentColor="rgba(168,85,247,0.6)"
-                                        onClick={() => executePlayerAction('dodge', dodge.name)}
-                                        tooltip={dodge.description}
-                                    />
-                                );
-                            })()}
-                        </div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>
 
-            {/* Surrender Confirmation Modal */}
+            {/* ── Surrender Confirmation Modal ── */}
             {showSurrenderConfirm && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 300,
-                }} onClick={() => setShowSurrenderConfirm(false)}>
+                <div
+                    style={{
+                        position: 'fixed', inset: 0,
+                        background: 'rgba(0,0,0,0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 300,
+                    }}
+                    onClick={() => setShowSurrenderConfirm(false)}
+                >
                     <div
                         style={{
-                            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(20, 30, 50, 0.95))',
-                            border: '2px solid rgba(239, 68, 68, 0.5)',
+                            background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(20,30,50,0.95))',
+                            border: '2px solid rgba(239,68,68,0.5)',
                             borderRadius: '12px',
                             padding: '2rem',
                             maxWidth: '400px',
                             textAlign: 'center',
-                            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(239, 68, 68, 0.2)',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.8), 0 0 20px rgba(239,68,68,0.2)',
                         }}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={e => e.stopPropagation()}
                     >
-                        <h3 style={{
-                            color: 'var(--accent)',
-                            marginBottom: '1rem',
-                            fontSize: '1.2rem',
-                            fontWeight: 700,
-                        }}>
+                        <h3 style={{ color: 'var(--accent)', marginBottom: '1rem', fontSize: '1.2rem', fontWeight: 700 }}>
                             Surrender Battle?
                         </h3>
-                        <p style={{
-                            color: 'var(--text-muted)',
-                            marginBottom: '1.5rem',
-                            fontSize: '0.9rem',
-                            lineHeight: 1.5,
-                        }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem', lineHeight: 1.5 }}>
                             Are you sure you want to give up? You will lose this battle.
                         </p>
-                        <div style={{
-                            display: 'flex',
-                            gap: '0.75rem',
-                            justifyContent: 'center',
-                        }}>
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => { surrender(); setShowSurrenderConfirm(false); }}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    background: 'rgba(239,68,68,0.2)',
+                                    border: '1px solid rgba(239,68,68,0.5)',
+                                    color: '#ef4444',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                    fontSize: '0.95rem',
+                                }}
+                            >
+                                Yes, Surrender
+                            </button>
                             <button
                                 onClick={() => setShowSurrenderConfirm(false)}
                                 style={{
-                                    padding: '0.6rem 1.2rem',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    padding: '0.75rem 1.5rem',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
                                     color: '#fff',
                                     borderRadius: '8px',
-                                    fontSize: '0.9rem',
-                                    fontWeight: 600,
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
+                                    fontWeight: 700,
+                                    fontSize: '0.95rem',
                                 }}
                             >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowSurrenderConfirm(false);
-                                    surrender();
-                                }}
-                                style={{
-                                    padding: '0.6rem 1.2rem',
-                                    background: 'rgba(239, 68, 68, 0.6)',
-                                    border: '1px solid rgba(239, 68, 68, 0.8)',
-                                    color: '#fff',
-                                    borderRadius: '8px',
-                                    fontSize: '0.9rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                }}
-                            >
-                                Surrender
+                                Keep Fighting
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };

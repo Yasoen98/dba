@@ -229,7 +229,7 @@ const TierBudgetBar: React.FC<{ used: number; total: number; color: string }> = 
 };
 
 const CharacterSlot: React.FC<{
-    char: { name: string; portraitUrl: string; imageColor: string; tier: number };
+    char: { name: string; portraitUrl?: string; imageColor: string; tier: number };
     isPlayer: boolean;
 }> = ({ char, isPlayer }) => (
     <div style={{
