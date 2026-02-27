@@ -1,0 +1,19 @@
+1. [x] limit 1 postaci tier 3 (implemented)
+2. [x] segregacja tier 3/2/1 – unavailable characters pushed to end (budget-aware)
+3. [x] stun efekt ma stunowac tylko zaatakowanego wroga
+4. [x]aoe effects/poison/blooding/heal/heal all/clear effects/senzu(dodaje 15% obrazen na 1 ture)/energy boost/drain hp from enemy
+5. [x]more effects per skill for characters
+6. [x] konczenie tury recznie z mozliwoscia wybrania 1 ataku per character i mozliwosc wybrania multi target
+7. [x] nowy rodzaj energii ktory dziala uniwersalnie
+8. [x] cd maja sie odnawiac zawsze co ture nie tylko gdy postac jest wybrana
+
+UI:
+1.brakujace techniques images
+2. login page login/register/guest z baza danych json
+3. [x] opcja surrender do poddania sie (button + logic)
+
+
+backend:
+1.index nowoczesny  w stylu menu
+2. system account login/register/quest
+3. [x]algorytm punktow ma premiowac zyjace postacie moje, a jesli przegrana i zabiera to wroga im wievej ma to wiecej zabiera
