@@ -271,6 +271,29 @@ html, body {
   99%            { opacity: 1; }
 }
 
+/* ── Game Over Transition ── */
+@keyframes gameOverFlash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; pointer-events: none; }
+}
+
+@keyframes gameOverBgIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes gameOverPanelIn {
+  0%   { opacity: 0; transform: translateY(40px) scale(0.95); }
+  60%  { opacity: 1; transform: translateY(-6px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes floatUp {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-40px); }
+}
+
 /* ── Menu Screen ── */
 .menu-screen {
   min-height: 100vh;
@@ -651,6 +674,77 @@ html, body {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* ── Ranking Button ── */
+.ranking-btn {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: 0.85rem 2rem;
+  background: transparent;
+  border: 1px solid rgba(255, 215, 0, 0.45);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: rgba(255, 215, 0, 0.75);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+}
+
+.ranking-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.05), transparent);
+  transition: all 0.3s ease;
+}
+
+.ranking-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.ranking-btn:hover::after { left: 100%; }
+
+.ranking-btn:hover {
+  background: rgba(255, 215, 0, 0.07);
+  border-color: rgba(255, 215, 0, 0.8);
+  color: var(--neon-gold);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.2), inset 0 0 12px rgba(255, 215, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.ranking-btn:active { transform: translateY(0); }
+
+.ranking-btn-corner {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-color: rgba(255, 215, 0, 0.5);
+  border-style: solid;
+}
+.ranking-btn-corner.tl { top: 3px; left: 3px; border-width: 1px 0 0 1px; }
+.ranking-btn-corner.tr { top: 3px; right: 3px; border-width: 1px 1px 0 0; }
+.ranking-btn-corner.bl { bottom: 3px; left: 3px; border-width: 0 0 1px 1px; }
+.ranking-btn-corner.br { bottom: 3px; right: 3px; border-width: 0 1px 1px 0; }
+
+.ranking-btn-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
 }
 
 /* ── Tier Info Bar ── */

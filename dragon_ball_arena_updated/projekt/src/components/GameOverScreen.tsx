@@ -1,82 +1,166 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameState } from '../stores/rootStore';
 import { getRankForScore } from '../stores/authSlice';
+import { deleteMatch } from '../services/matchService';
 
 export const GameOverScreen: React.FC = () => {
-    // FIX #2: pobieramy lastBattlePoints ze store zamiast hardkodować 50
-    const { winner, playerRoster, opponentRoster, turnNumber, playerScore, resetGame, lastBattlePoints } = useGameState();
+    const { winner, playerRoster, opponentRoster, turnNumber, playerScore, resetGame, lastBattlePoints, isGuest, isOnlineMatch, matchId } = useGameState();
 
     const isVictory = winner === 'player';
-    const pointsEarned = lastBattlePoints; // FIX #2: realna wartość punktów
-    const newScore = playerScore;
+    const matchDeletedRef = useRef(false);
 
-    const playerSurvivors = playerRoster.filter(c => c.currentHp > 0).length;
+    // ── Delete match from DB when game ends (online only, only once) ──────────
+    // Winner delays deletion so the loser's poll can still read the final snapshot.
+    // The PATCH (final snapshot) and this DELETE race each other — without a delay
+    // the match gets deleted before the loser ever receives the winning snapshot.
+    // Winner delays 10s so the loser can still poll the final snapshot.
+    // Loser delays 3s so the surrender PATCH (from unmount cleanup) can land
+    // before the DELETE races it.
+    useEffect(() => {
+        if (!isOnlineMatch || !matchId || matchDeletedRef.current) return;
+        matchDeletedRef.current = true;
+        const delay = isVictory ? 10_000 : 3_000;
+        const t = setTimeout(() => deleteMatch(matchId), delay);
+        return () => clearTimeout(t);
+    }, [isOnlineMatch, matchId, isVictory]);
+
+    // ── Staged animation ─────────────────────────────────────────────────────
+    const [showFlash, setShowFlash] = useState(true);
+    const [showContent, setShowContent] = useState(false);
+
+    useEffect(() => {
+        const t1 = setTimeout(() => setShowFlash(false), 500);
+        const t2 = setTimeout(() => setShowContent(true), 300);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+    }, []);
+
+    const flashColor = isVictory ? 'rgba(56,189,248,0.55)' : 'rgba(239,68,68,0.55)';
+
+    return (
+        <div style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+            {/* Background */}
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: isVictory
+                    ? 'radial-gradient(circle at center, #0c1a2e 0%, #020817 100%)'
+                    : 'radial-gradient(circle at center, #1a0c0c 0%, #020817 100%)',
+                animation: 'gameOverBgIn 0.7s ease both',
+            }} />
+
+            {/* Color flash */}
+            {showFlash && (
+                <div style={{
+                    position: 'fixed', inset: 0,
+                    background: flashColor,
+                    zIndex: 999,
+                    animation: 'gameOverFlash 0.5s ease-out forwards',
+                    pointerEvents: 'none',
+                }} />
+            )}
+
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                zIndex: 1,
+                opacity: showContent ? 1 : 0,
+                transition: 'opacity 0.2s',
+            }}>
+                {isVictory
+                    ? <VictoryPanel
+                        playerRoster={playerRoster}
+                        opponentRoster={opponentRoster}
+                        turnNumber={turnNumber}
+                        playerScore={playerScore}
+                        lastBattlePoints={lastBattlePoints}
+                        isGuest={isGuest}
+                        showContent={showContent}
+                        resetGame={resetGame}
+                      />
+                    : <DefeatPanel
+                        playerRoster={playerRoster}
+                        opponentRoster={opponentRoster}
+                        turnNumber={turnNumber}
+                        playerScore={playerScore}
+                        lastBattlePoints={lastBattlePoints}
+                        isGuest={isGuest}
+                        showContent={showContent}
+                        resetGame={resetGame}
+                      />
+                }
+            </div>
+        </div>
+    );
+};
+
+// ── Victory Panel — pełne podsumowanie ────────────────────────────────────────
+
+const VictoryPanel: React.FC<{
+    playerRoster: { name: string; currentHp: number; maxHp: number; portraitUrl?: string; imageColor: string }[];
+    opponentRoster: { name: string; currentHp: number; maxHp: number; portraitUrl?: string; imageColor: string }[];
+    turnNumber: number;
+    playerScore: number;
+    lastBattlePoints: number;
+    isGuest: boolean;
+    showContent: boolean;
+    resetGame: () => void;
+}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, showContent, resetGame }) => {
+    const playerSurvivors  = playerRoster.filter(c => c.currentHp > 0).length;
     const opponentSurvivors = opponentRoster.filter(c => c.currentHp > 0).length;
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: isVictory
-                ? 'radial-gradient(circle at center, #0c1a2e 0%, #0f172a 100%)'
-                : 'radial-gradient(circle at center, #1a0c0c 0%, #0f172a 100%)',
+        <div className="glass-panel" style={{
+            padding: '3rem 2.5rem',
+            maxWidth: '560px',
+            width: '90%',
+            textAlign: 'center',
+            animation: showContent ? 'gameOverPanelIn 0.7s cubic-bezier(0.22,1,0.36,1) both' : 'none',
         }}>
-            <div className="glass-panel" style={{
-                padding: '3rem 2.5rem',
-                maxWidth: '560px',
-                width: '90%',
-                textAlign: 'center',
-                animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            <div style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}>🏆</div>
+
+            <h1 style={{
+                fontSize: '3.5rem', fontWeight: 900,
+                color: 'var(--ki-color)',
+                marginBottom: '0.25rem',
+                textShadow: '0 0 30px rgba(56,189,248,0.6)',
+                letterSpacing: '3px',
+                fontFamily: "'Orbitron', sans-serif",
             }}>
-                {/* Trophy / Skull */}
-                <div style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}>
-                    {isVictory ? '🏆' : '💀'}
-                </div>
+                VICTORY!
+            </h1>
 
-                {/* Title */}
-                <h1 style={{
-                    fontSize: '3.5rem',
-                    fontWeight: 900,
-                    color: isVictory ? 'var(--ki-color)' : 'var(--physical-color)',
-                    marginBottom: '0.25rem',
-                    textShadow: isVictory
-                        ? '0 0 30px rgba(56,189,248,0.6)'
-                        : '0 0 30px rgba(239,68,68,0.6)',
-                    letterSpacing: '3px',
-                }}>
-                    {isVictory ? 'VICTORY!' : 'DEFEAT'}
-                </h1>
+            <p style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                Rozgniotłeś przeciwnika! Twoja moc rośnie!
+            </p>
 
-                <p style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                    {isVictory
-                        ? 'You crushed the opponent! Your power grows!'
-                        : 'You were defeated. Train harder, warrior.'}
-                </p>
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--accent)" />
+                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--ki-color)" />
+                <StatCard
+                    label="Punkty"
+                    value={lastBattlePoints > 0 ? `+${lastBattlePoints}` : String(lastBattlePoints)}
+                    color={lastBattlePoints > 0 ? '#22c55e' : 'var(--text-muted)'}
+                />
+            </div>
 
-                {/* Stats grid */}
+            {/* Rank */}
+            {isGuest ? (
                 <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: '0.75rem',
+                    background: 'rgba(168,85,247,0.08)',
+                    border: '1px solid rgba(168,85,247,0.2)',
+                    borderRadius: '12px',
+                    padding: '0.75rem 1rem',
                     marginBottom: '1.5rem',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-muted)',
                 }}>
-                    <StatCard label="Rounds" value={String(turnNumber - 1)} color="var(--accent)" />
-                    <StatCard
-                        label="Survivors"
-                        value={`${playerSurvivors} vs ${opponentSurvivors}`}
-                        color={isVictory ? 'var(--ki-color)' : 'var(--physical-color)'}
-                    />
-                    {/* FIX #2: pokazuje realne punkty (mogą być ujemne przy przegranej) */}
-                    <StatCard
-                        label="Points"
-                        value={pointsEarned > 0 ? `+${pointsEarned}` : String(pointsEarned)}
-                        color={pointsEarned > 0 ? '#22c55e' : pointsEarned === 0 ? 'var(--text-muted)' : 'var(--physical-color)'}
-                    />
+                    Grasz jako <strong style={{ color: 'var(--special-color)' }}>Gość</strong> — postęp nie jest zapisywany.
                 </div>
-
-                {/* Rank display */}
+            ) : (
                 <div style={{
                     background: 'rgba(255,255,255,0.05)',
                     border: '1px solid rgba(255,255,255,0.1)',
@@ -87,51 +171,152 @@ export const GameOverScreen: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                 }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Current Rank</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Ranga</span>
                     <span style={{ color: 'var(--accent)', fontWeight: 800, fontSize: '1rem' }}>
-                        {getRankForScore(newScore)}
+                        {getRankForScore(playerScore)}
                     </span>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        Power Level: <strong style={{ color: 'var(--text-main)' }}>{newScore}</strong>
+                        Power Level: <strong style={{ color: 'var(--text-main)' }}>{playerScore}</strong>
                     </span>
                 </div>
+            )}
 
-                {/* Roster summary */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '2rem' }}>
-                    <RosterSummary label="Your Team" roster={playerRoster} isPlayer />
-                    <RosterSummary label="Opponent" roster={opponentRoster} isPlayer={false} />
-                </div>
-
-                {/* Buttons */}
-                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                    <button
-                        className="btn"
-                        style={{ fontSize: '1.05rem', padding: '0.85rem 2rem' }}
-                        onClick={resetGame}
-                    >
-                        Return to Menu
-                    </button>
-                    <button
-                        className="btn"
-                        style={{
-                            fontSize: '1.05rem',
-                            padding: '0.85rem 2rem',
-                            background: 'rgba(255,255,255,0.08)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            boxShadow: 'none',
-                        }}
-                        onClick={() => {
-                            resetGame();
-                            setTimeout(() => useGameState.getState().startMatchmaking(), 50);
-                        }}
-                    >
-                        Play Again
-                    </button>
-                </div>
+            {/* Roster summary */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '2rem' }}>
+                <RosterSummary label="Twoja Drużyna" roster={playerRoster}   isPlayer />
+                <RosterSummary label="Przeciwnik"    roster={opponentRoster} isPlayer={false} />
             </div>
+
+            <ActionButtons resetGame={resetGame} />
         </div>
     );
 };
+
+// ── Defeat Panel — pełne podsumowanie w czerwonych odcieniach ─────────────────
+
+const DefeatPanel: React.FC<{
+    playerRoster: { name: string; currentHp: number; maxHp: number; portraitUrl?: string; imageColor: string }[];
+    opponentRoster: { name: string; currentHp: number; maxHp: number; portraitUrl?: string; imageColor: string }[];
+    turnNumber: number;
+    playerScore: number;
+    lastBattlePoints: number;
+    isGuest: boolean;
+    showContent: boolean;
+    resetGame: () => void;
+}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, showContent, resetGame }) => {
+    const playerSurvivors  = playerRoster.filter(c => c.currentHp > 0).length;
+    const opponentSurvivors = opponentRoster.filter(c => c.currentHp > 0).length;
+
+    return (
+        <div className="glass-panel" style={{
+            padding: '3rem 2.5rem',
+            maxWidth: '560px',
+            width: '90%',
+            textAlign: 'center',
+            animation: showContent ? 'gameOverPanelIn 0.7s cubic-bezier(0.22,1,0.36,1) both' : 'none',
+            border: '1px solid rgba(239,68,68,0.2)',
+        }}>
+            <div style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}>💀</div>
+
+            <h1 style={{
+                fontSize: '3.5rem', fontWeight: 900,
+                color: 'var(--physical-color)',
+                marginBottom: '0.25rem',
+                textShadow: '0 0 30px rgba(239,68,68,0.6)',
+                letterSpacing: '3px',
+                fontFamily: "'Orbitron', sans-serif",
+            }}>
+                YOU LOSE!
+            </h1>
+
+            <p style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                Poniosłeś porażkę. Trenuj ciężej, wojowniku.
+            </p>
+
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--physical-color)" />
+                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--physical-color)" />
+                <StatCard
+                    label="Punkty"
+                    value={lastBattlePoints > 0 ? `+${lastBattlePoints}` : String(lastBattlePoints)}
+                    color={lastBattlePoints >= 0 ? '#f97316' : '#ef4444'}
+                />
+            </div>
+
+            {/* Rank */}
+            {isGuest ? (
+                <div style={{
+                    background: 'rgba(168,85,247,0.08)',
+                    border: '1px solid rgba(168,85,247,0.2)',
+                    borderRadius: '12px',
+                    padding: '0.75rem 1rem',
+                    marginBottom: '1.5rem',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-muted)',
+                }}>
+                    Grasz jako <strong style={{ color: 'var(--special-color)' }}>Gość</strong> — postęp nie jest zapisywany.
+                </div>
+            ) : (
+                <div style={{
+                    background: 'rgba(239,68,68,0.05)',
+                    border: '1px solid rgba(239,68,68,0.15)',
+                    borderRadius: '12px',
+                    padding: '0.75rem 1rem',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Ranga</span>
+                    <span style={{ color: 'var(--physical-color)', fontWeight: 800, fontSize: '1rem' }}>
+                        {getRankForScore(playerScore)}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        Power Level: <strong style={{ color: 'var(--text-main)' }}>{playerScore}</strong>
+                    </span>
+                </div>
+            )}
+
+            {/* Roster summary */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '2rem' }}>
+                <RosterSummary label="Twoja Drużyna" roster={playerRoster}   isPlayer />
+                <RosterSummary label="Przeciwnik"    roster={opponentRoster} isPlayer={false} />
+            </div>
+
+            <ActionButtons resetGame={resetGame} />
+        </div>
+    );
+};
+
+// ── Shared buttons ─────────────────────────────────────────────────────────────
+
+const ActionButtons: React.FC<{ resetGame: () => void }> = ({ resetGame }) => (
+    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+        <button
+            className="btn"
+            style={{ fontSize: '1.05rem', padding: '0.85rem 2rem' }}
+            onClick={resetGame}
+        >
+            Menu Główne
+        </button>
+        <button
+            className="btn"
+            style={{
+                fontSize: '1.05rem', padding: '0.85rem 2rem',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: 'none',
+            }}
+            onClick={() => {
+                resetGame();
+                setTimeout(() => useGameState.getState().startMatchmaking(), 50);
+            }}
+        >
+            Zagraj Ponownie
+        </button>
+    </div>
+);
 
 // ── Helper sub-components ──────────────────────────────────────────────────────
 

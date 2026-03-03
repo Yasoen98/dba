@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameState } from '../stores/rootStore';
-import { DRAFT_TIER_LIMIT } from '../types';
+import { type Character, DRAFT_TIER_LIMIT } from '../types';
+import { getMatch, patchMatch } from '../services/matchService';
 
 const TIER_LABELS: Record<number, string> = {
     1: 'Common',
@@ -18,12 +19,55 @@ export const DraftScreen: React.FC = () => {
     const {
         availableCharacters,
         draftCharacter,
+        applyOpponentDraftPick,
         playerRoster,
         opponentRoster,
         draftTurn,
         draftTierUsed,
         opponentTierUsed,
+        isOnlineMatch,
+        matchId,
+        myRole,
+        matchFoundOpponent,
     } = useGameState();
+
+    const [hoveredChar, setHoveredChar] = useState<Character | null>(null);
+    const prevOpponentRosterLen = useRef(0);
+
+    // Post pick to server before calling draftCharacter so the request is in-flight
+    // even when startBattle() fires immediately (which would unmount DraftScreen
+    // before any useEffect could run for the last pick).
+    const handlePickCharacter = (charId: string) => {
+        if (isOnlineMatch && matchId && myRole) {
+            const rosterKey = myRole === 'player1' ? 'p1Roster' : 'p2Roster';
+            patchMatch(matchId, { [rosterKey]: [...playerRoster.map(c => c.id), charId] });
+        }
+        draftCharacter(charId);
+    };
+
+    // ── Online: poll for opponent's picks when it's their turn ─────────────────
+    useEffect(() => {
+        if (!isOnlineMatch || !matchId || !myRole || draftTurn !== 'opponent') return;
+
+        const poll = setInterval(async () => {
+            const match = await getMatch(matchId);
+            if (!match) return;
+
+            const opRosterKey = myRole === 'player1' ? 'p2Roster' : 'p1Roster';
+            const serverOpRoster: string[] | null = (match as Record<string, unknown>)[opRosterKey] as string[] | null;
+            if (!serverOpRoster) return;
+
+            // Apply any new picks that aren't yet in local opponentRoster
+            const localLen = prevOpponentRosterLen.current;
+            if (serverOpRoster.length > localLen) {
+                const newPickId = serverOpRoster[localLen];
+                prevOpponentRosterLen.current = localLen + 1;
+                applyOpponentDraftPick(newPickId);
+            }
+        }, 1500);
+
+        return () => clearInterval(poll);
+    }, [isOnlineMatch, matchId, myRole, draftTurn, applyOpponentDraftPick]);
 
     const remainingBudget = DRAFT_TIER_LIMIT - draftTierUsed;
     const hasLegendary = playerRoster.some(c => c.tier === 3);
@@ -53,6 +97,9 @@ export const DraftScreen: React.FC = () => {
                     </h3>
                     {/* Tier budget bar */}
                     <TierBudgetBar used={draftTierUsed} total={DRAFT_TIER_LIMIT} color="var(--ki-color)" />
+                    <div style={{ fontSize: '0.72rem', marginTop: '4px', color: hasLegendary ? '#f59e0b' : 'var(--text-muted)' }}>
+                        Legendarna: {hasLegendary ? 1 : 0}/1
+                    </div>
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
                         {playerRoster.map(c => (
                             <CharacterSlot key={c.id} char={c} isPlayer />
@@ -95,11 +142,104 @@ export const DraftScreen: React.FC = () => {
             }}>
                 {draftTurn === 'player'
                     ? `Your turn to pick! (${remainingBudget} tier point${remainingBudget !== 1 ? 's' : ''} remaining)`
-                    : 'Opponent is picking...'}
+                    : isOnlineMatch
+                        ? `Czekanie na ${matchFoundOpponent ?? 'przeciwnika'}...`
+                        : 'Opponent is picking...'}
             </div>
             {hasLegendary && draftTurn === 'player' && (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                     You already have a Legendary (Tier 3); another cannot be drafted.
+                </div>
+            )}
+
+            {/* Character stats preview panel */}
+            {hoveredChar && (
+                <div style={{
+                    position: 'fixed',
+                    right: '1.5rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '230px',
+                    background: 'rgba(10,15,30,0.97)',
+                    border: `1px solid ${hoveredChar.imageColor}55`,
+                    borderRadius: '12px',
+                    padding: '1rem',
+                    zIndex: 200,
+                    boxShadow: `0 0 20px ${hoveredChar.imageColor}33`,
+                    pointerEvents: 'none',
+                }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                        <div style={{
+                            width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                            backgroundColor: hoveredChar.imageColor,
+                            backgroundImage: hoveredChar.portraitUrl ? `url(${hoveredChar.portraitUrl})` : 'none',
+                            backgroundSize: 'cover', backgroundPosition: 'center',
+                            border: `2px solid ${hoveredChar.imageColor}`,
+                        }} />
+                        <div>
+                            <div style={{ fontWeight: 700, color: hoveredChar.imageColor, fontSize: '0.9rem' }}>
+                                {hoveredChar.name}
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: TIER_COLORS[hoveredChar.tier] }}>
+                                T{hoveredChar.tier} · {TIER_LABELS[hoveredChar.tier]}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', fontSize: '0.72rem' }}>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '4px 6px', textAlign: 'center' }}>
+                            <div style={{ color: '#22c55e', fontWeight: 700 }}>{hoveredChar.maxHp}</div>
+                            <div style={{ color: 'var(--text-muted)' }}>HP</div>
+                        </div>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '4px 6px', textAlign: 'center' }}>
+                            <div style={{ color: '#ef4444', fontWeight: 700 }}>{hoveredChar.stats.attack}</div>
+                            <div style={{ color: 'var(--text-muted)' }}>ATK</div>
+                        </div>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '4px 6px', textAlign: 'center' }}>
+                            <div style={{ color: '#38bdf8', fontWeight: 700 }}>{hoveredChar.stats.defense}</div>
+                            <div style={{ color: 'var(--text-muted)' }}>DEF</div>
+                        </div>
+                    </div>
+
+                    {/* Passive */}
+                    {hoveredChar.passive && (
+                        <div style={{
+                            background: 'rgba(251,191,36,0.08)',
+                            border: '1px solid rgba(251,191,36,0.25)',
+                            borderRadius: '6px',
+                            padding: '5px 8px',
+                            marginBottom: '0.75rem',
+                            fontSize: '0.65rem',
+                            color: '#fbbf24',
+                        }}>
+                            ✦ {hoveredChar.passive.description}
+                        </div>
+                    )}
+
+                    {/* Techniques */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Techniki
+                        </div>
+                        {hoveredChar.techniques.map(t => (
+                            <div key={t.id} style={{ marginBottom: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', gap: '0.5rem' }}>
+                                    <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{t.name}</span>
+                                    <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+                                        {t.damage > 0 ? `${t.damage} dmg` : 'Utility'}
+                                        {t.effect !== 'none' ? ` · ${t.effect}` : ''}
+                                    </span>
+                                </div>
+                                {t.description && (
+                                    <div style={{ fontSize: '0.6rem', color: '#64748b', lineHeight: 1.3, marginTop: '1px' }}>
+                                        {t.description}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -121,7 +261,9 @@ export const DraftScreen: React.FC = () => {
                     return (
                         <button
                             key={char.id}
-                            onClick={() => draftCharacter(char.id)}
+                            onClick={() => handlePickCharacter(char.id)}
+                            onMouseEnter={() => setHoveredChar(char)}
+                            onMouseLeave={() => setHoveredChar(null)}
                             disabled={disabled}
                             className="glass-panel"
                             style={{

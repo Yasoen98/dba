@@ -15,6 +15,11 @@ dist-ssr
 # FIX #4: ignoruj pliki backup — nie powinny być w repo
 *.bak
 
+# Lokalne dane i konfiguracja
+db.json
+todo.txt
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

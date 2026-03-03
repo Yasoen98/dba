@@ -1,12 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { RootState } from './rootStore';
-import type { Character, PlayerEnergy, CombatLogEntry, ActionCost, EffectType } from '../types';
-
-export interface BattleCharacter extends Character {
-    currentHp: number;
-    cooldowns: Record<string, number>;
-    statusEffects: { effect: EffectType; duration: number }[];
-}
+import type { PlayerEnergy, CombatLogEntry, ActionCost, EffectType, BattleCharacter } from '../types';
+import { ENERGY_TYPE_CAP } from '../types';
 
 interface BattleSliceState {
     playerActiveIndex: number;
@@ -24,12 +19,15 @@ interface BattleSliceState {
 export interface BattleSlice extends BattleSliceState {
     setPlayerActiveIndex: (index: number) => void;
     setOpponentActiveIndex: (index: number) => void;
+    resetBattle: () => void;
     startBattle: () => void;
     executePlayerAction: (actionType: 'technique' | 'dodge', actionId: string) => void;
     passTurn: () => void;
     executeOpponentTurn: () => void;
     endTurn: () => void;
     surrender: () => void;
+    winByOpponentDisconnect: () => void;
+    applyOnlineBattleSnapshot: (snap: import('../services/matchService').OnlineBattleSnapshot, myRole: import('../services/matchService').MatchRole) => void;
 }
 
 const initialEnergy: PlayerEnergy = { ki: 0, physical: 0, special: 0, universal: 0 };
@@ -141,11 +139,113 @@ function calcDamage(baseDamage: number, attackerAtk: number, defenderDef: number
     return effect === 'pierce' ? baseDamage : Math.floor(baseDamage * (attackerAtk / defenderDef));
 }
 
-function computeDamage(attacker: BattleCharacter, defender: BattleCharacter, baseDamage: number, effect: EffectType): number {
-    let dmg = calcDamage(baseDamage, attacker.stats.attack, defender.stats.defense, effect);
-    if (attacker.statusEffects.some(se => se.effect === 'senzu' || se.effect === 'buff')) {
+function computeDamage(
+    attacker: BattleCharacter,
+    defender: BattleCharacter,
+    baseDamage: number,
+    effect: EffectType,
+    context?: { attackerAllyKOs?: number; defenderAliveAllies?: number; attackerAliveAllies?: number },
+): number {
+    // ── ATK stat modifiers ──────────────────────────────────────────────────────
+    let atkStat = attacker.stats.attack;
+
+    // sleeping_warrior: Gohan +15% ATK per KO'd ally
+    if (attacker.passive?.id === 'sleeping_warrior' && (context?.attackerAllyKOs ?? 0) > 0)
+        atkStat = Math.floor(atkStat * (1 + context!.attackerAllyKOs! * 0.15));
+    // wolf_spirit: Yamcha +20% ATK when HP < 50%
+    if (attacker.passive?.id === 'wolf_spirit' && attacker.currentHp / attacker.maxHp < 0.50)
+        atkStat = Math.floor(atkStat * 1.20);
+    // death_grip: Saibaman +30% ATK when HP < 30%
+    if (attacker.passive?.id === 'death_grip' && attacker.currentHp / attacker.maxHp < 0.30)
+        atkStat = Math.floor(atkStat * 1.30);
+    // low_class_fury: Raditz +5% ATK per elapsed round (max 5)
+    if (attacker.passive?.id === 'low_class_fury' && (attacker.passiveStacks ?? 0) > 0)
+        atkStat = Math.floor(atkStat * (1 + Math.min(attacker.passiveStacks!, 5) * 0.05));
+    // elite_soldier: Jeice +12% ATK when any ally alive
+    if (attacker.passive?.id === 'elite_soldier' && (context?.attackerAliveAllies ?? 0) > 0)
+        atkStat = Math.floor(atkStat * 1.12);
+    // tri_form: Tien +20% ATK at full HP
+    if (attacker.passive?.id === 'tri_form' && attacker.currentHp === attacker.maxHp)
+        atkStat = Math.floor(atkStat * 1.20);
+    // future_warrior: Trunks +18% ATK when HP < 50%
+    if (attacker.passive?.id === 'future_warrior' && attacker.currentHp / attacker.maxHp < 0.50)
+        atkStat = Math.floor(atkStat * 1.18);
+    // battle_pose: Recoome +20% ATK turn after dodging
+    if (attacker.passive?.id === 'battle_pose' && (attacker.passiveStacks ?? 0) > 0)
+        atkStat = Math.floor(atkStat * 1.20);
+    // force_captain: Ginyu +20% ATK when any ally alive
+    if (attacker.passive?.id === 'force_captain' && (context?.attackerAliveAllies ?? 0) > 0)
+        atkStat = Math.floor(atkStat * 1.20);
+    // potara_mastery: Vegito +10% ATK when HP > 70%
+    if (attacker.passive?.id === 'potara_mastery' && attacker.currentHp / attacker.maxHp > 0.70)
+        atkStat = Math.floor(atkStat * 1.10);
+    // survivor_instinct: Cui +25% ATK when HP < 40%
+    if (attacker.passive?.id === 'survivor_instinct' && attacker.currentHp / attacker.maxHp < 0.40)
+        atkStat = Math.floor(atkStat * 1.25);
+    // iron_mother: Chi-Chi +15% ATK per KO'd ally (max 2)
+    if (attacker.passive?.id === 'iron_mother' && (context?.attackerAllyKOs ?? 0) > 0)
+        atkStat = Math.floor(atkStat * (1 + Math.min(context!.attackerAllyKOs!, 2) * 0.15));
+    // battle_frenzy: Launch +8% ATK per hit received (max 3)
+    if (attacker.passive?.id === 'battle_frenzy' && (attacker.passiveStacks ?? 0) > 0)
+        atkStat = Math.floor(atkStat * (1 + Math.min(attacker.passiveStacks!, 3) * 0.08));
+
+    // ── DEF stat modifiers ──────────────────────────────────────────────────────
+    let defStat = defender.stats.defense;
+
+    // teamwork: Krillin DEF +10% per alive ally
+    if (defender.passive?.id === 'teamwork' && (context?.defenderAliveAllies ?? 0) > 0)
+        defStat = Math.floor(defStat * (1 + context!.defenderAliveAllies! * 0.10));
+    // perfect_adaptation: Cell DEF +7% per hit taken (max 3 stacks)
+    if (defender.passive?.id === 'perfect_adaptation' && (defender.passiveStacks ?? 0) > 0)
+        defStat = Math.floor(defStat * (1 + Math.min(defender.passiveStacks!, 3) * 0.07));
+    // brute_force: Dodoria ignores 25% of target DEF
+    if (attacker.passive?.id === 'brute_force')
+        defStat = Math.floor(defStat * 0.75);
+    // gravity_mastery: Pui Pui DEF +20% when HP > 60%
+    if (defender.passive?.id === 'gravity_mastery' && defender.currentHp / defender.maxHp > 0.60)
+        defStat = Math.floor(defStat * 1.20);
+
+    // ── Base damage ─────────────────────────────────────────────────────────────
+    let dmg = effect === 'pierce' ? baseDamage : Math.floor(baseDamage * (atkStat / defStat));
+
+    // ── Post-formula multipliers ────────────────────────────────────────────────
+
+    // senzu / buff status boost
+    if (attacker.statusEffects.some(se => se.effect === 'senzu' || se.effect === 'buff'))
         dmg = Math.floor(dmg * 1.15);
+    // saiyan_pride: Vegeta SS +25% when HP < 35%
+    if (attacker.passive?.id === 'saiyan_pride' && attacker.currentHp / attacker.maxHp < 0.35)
+        dmg = Math.floor(dmg * 1.25);
+    // legendary_power: Broly +5% per rage stack (max 3)
+    if (attacker.passive?.id === 'legendary_power') {
+        const stacks = Math.min(attacker.passiveStacks ?? 0, 3);
+        if (stacks > 0) dmg = Math.floor(dmg * (1 + stacks * 0.05));
     }
+    // city_defender: Videl +15% dmg to weakened enemies
+    if (attacker.passive?.id === 'city_defender' && defender.statusEffects.some(se => se.effect === 'weaken'))
+        dmg = Math.floor(dmg * 1.15);
+    // tyrant_pressure: Cooler +20% dmg to poisoned/weakened enemies
+    if (attacker.passive?.id === 'tyrant_pressure' && defender.statusEffects.some(se => ['poison', 'weaken'].includes(se.effect)))
+        dmg = Math.floor(dmg * 1.20);
+    // saiyan_armor: Nappa incoming damage -12%
+    if (defender.passive?.id === 'saiyan_armor')
+        dmg = Math.floor(dmg * 0.88);
+    // rubbery_body: Majin Buu incoming damage -20%
+    if (defender.passive?.id === 'rubbery_body')
+        dmg = Math.floor(dmg * 0.80);
+    // fusion_power: Gogeta all techniques +12%
+    if (attacker.passive?.id === 'fusion_power')
+        dmg = Math.floor(dmg * 1.12);
+    // pain_immunity: Spopovich incoming damage -15%
+    if (defender.passive?.id === 'pain_immunity')
+        dmg = Math.floor(dmg * 0.85);
+    // opportunist: Yajirobe +15% dmg when target has any negative status
+    if (attacker.passive?.id === 'opportunist' && defender.statusEffects.some(se => ['poison', 'bleed', 'weaken', 'stun'].includes(se.effect)))
+        dmg = Math.floor(dmg * 1.15);
+    // first_strike: Tao +20% dmg for first technique per turn (passiveStacks === 0 means unused this turn)
+    if (attacker.passive?.id === 'first_strike' && (attacker.passiveStacks ?? 0) === 0)
+        dmg = Math.floor(dmg * 1.20);
+
     return dmg;
 }
 
@@ -215,19 +315,25 @@ function decrementCooldowns(char: BattleCharacter): BattleCharacter {
     return { ...char, cooldowns: newCooldowns };
 }
 
+function capEnergy(e: PlayerEnergy): PlayerEnergy {
+    return {
+        ki:        Math.min(e.ki,        ENERGY_TYPE_CAP),
+        physical:  Math.min(e.physical,  ENERGY_TYPE_CAP),
+        special:   Math.min(e.special,   ENERGY_TYPE_CAP),
+        universal: Math.min(e.universal, ENERGY_TYPE_CAP),
+    };
+}
+
 function grantEnergy(energy: PlayerEnergy, aliveCount: number): PlayerEnergy {
-    const newEnergy = { ...energy };
-    let total = newEnergy.ki + newEnergy.physical + newEnergy.special + newEnergy.universal;
+    const e = { ...energy };
     for (let i = 0; i < aliveCount; i++) {
-        if (total >= 10) break;
         const roll = Math.random();
-        if (roll < 0.35) newEnergy.ki++;
-        else if (roll < 0.65) newEnergy.physical++;
-        else if (roll < 0.90) newEnergy.special++;
-        else newEnergy.universal++;
-        total++;
+        if      (roll < 0.35 && e.ki        < ENERGY_TYPE_CAP) e.ki++;
+        else if (roll < 0.65 && e.physical  < ENERGY_TYPE_CAP) e.physical++;
+        else if (roll < 0.90 && e.special   < ENERGY_TYPE_CAP) e.special++;
+        else if (               e.universal < ENERGY_TYPE_CAP) e.universal++;
     }
-    return newEnergy;
+    return e;
 }
 
 // ─── Bot AI ────────────────────────────────────────────────────────────────────
@@ -275,8 +381,8 @@ function chooseBotAction(
         if (energyMove) return { type: 'technique', techId: energyMove.id };
     }
 
-    // Regen if moderate HP loss
-    if (botHpRatio < 0.55 && !botChar.statusEffects.some(e => e.effect === 'regen')) {
+    // Regen if moderate HP loss and not already active on bot
+    if (botHpRatio < 0.55 && !botChar.statusEffects.some(e => e.effect === 'regen') && !playerChar.statusEffects.some(e => e.effect === 'regen')) {
         const regen = affordable.find(t => t.effect === 'regen');
         if (regen) return { type: 'technique', techId: regen.id };
     }
@@ -344,22 +450,55 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
     setPlayerActiveIndex: (index) => set({ playerActiveIndex: index }),
     setOpponentActiveIndex: (index) => set({ opponentActiveIndex: index }),
 
+    resetBattle: () => {
+        set({
+            playerActiveIndex: 0,
+            opponentActiveIndex: 0,
+            playerEnergy: { ki: 0, physical: 0, special: 0, universal: 0 },
+            opponentEnergy: { ki: 0, physical: 0, special: 0, universal: 0 },
+            turnNumber: 1,
+            isPlayerTurn: true,
+            combatLogs: [],
+            winner: null,
+            playerActionsUsed: {},
+            lastBattlePoints: 0,
+        });
+    },
+
     startBattle: () => {
-        const pe = { ...initialEnergy };
-        const oe = { ...initialEnergy };
+        let pe = { ...initialEnergy };
+        let oe = { ...initialEnergy };
         const types = ['ki', 'physical', 'special'] as const;
         for (let i = 0; i < 3; i++) {
             pe[types[Math.floor(Math.random() * 3)]]++;
             oe[types[Math.floor(Math.random() * 3)]]++;
         }
+
+        // Namekian body: Piccolo starts with +1 special energy
+        const state = get();
+        state.playerRoster.forEach(c => {
+            if (c.passive?.id === 'namekian_body') {
+                pe = capEnergy({ ...pe, special: pe.special + 1 });
+            }
+        });
+        state.opponentRoster.forEach(c => {
+            if (c.passive?.id === 'namekian_body') {
+                oe = capEnergy({ ...oe, special: oe.special + 1 });
+            }
+        });
+
+        // In online mode: player1 acts first, player2 starts by polling
+        const isOnline = state.isOnlineMatch;
+        const role = state.myRole;
+        const initialTurn = !isOnline || role === 'player1';
+
         set({
-            phase: 'battle',
             playerActiveIndex: 0,
             opponentActiveIndex: 0,
             playerEnergy: pe,
             opponentEnergy: oe,
             turnNumber: 1,
-            isPlayerTurn: true,
+            isPlayerTurn: initialTurn,
             combatLogs: [{
                 id: Date.now(),
                 turn: 1,
@@ -372,6 +511,7 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             playerActionsUsed: {},
             lastBattlePoints: 0,
         });
+        get().setPhase('battle');
     },
 
     executePlayerAction: (actionType, actionId) => {
@@ -447,12 +587,36 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         if (actionType === 'technique') {
             if (effect === 'aoe') {
                 let totalDeals = 0;
+                const koCount = newPlayerRoster.filter((c, idx) => idx !== state.playerActiveIndex && c.currentHp <= 0).length;
+                const attackerAliveAllies = newPlayerRoster.filter((c, idx) => idx !== state.playerActiveIndex && c.currentHp > 0).length;
+                const playerAttacker = newPlayerRoster[state.playerActiveIndex];
                 newOppRoster = newOppRoster.map((tar) => {
                     if (tar.currentHp <= 0) return tar;
-                    const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], tar, damage, 'none');
+                    const aliveAllies = newOppRoster.filter((c) => c !== tar && c.currentHp > 0).length;
+                    let actualDamage = computeDamage(playerAttacker, tar, damage, 'none', {
+                        attackerAllyKOs: koCount,
+                        defenderAliveAllies: aliveAllies,
+                        attackerAliveAllies,
+                    });
+                    // ghost_army: Gotenks AOE +20%
+                    if (playerAttacker.passive?.id === 'ghost_army')
+                        actualDamage = Math.floor(actualDamage * 1.20);
                     totalDeals += actualDamage;
-                    return { ...tar, currentHp: Math.max(0, tar.currentHp - actualDamage) };
+                    let updated = { ...tar, currentHp: Math.max(0, tar.currentHp - actualDamage) };
+                    // legendary_power: Broly rage stacks
+                    if (updated.passive?.id === 'legendary_power' && actualDamage > 0)
+                        updated = { ...updated, passiveStacks: Math.min((updated.passiveStacks ?? 0) + 1, 3) };
+                    // perfect_adaptation: Cell DEF stacks
+                    if (updated.passive?.id === 'perfect_adaptation' && actualDamage > 0)
+                        updated = { ...updated, passiveStacks: Math.min((updated.passiveStacks ?? 0) + 1, 3) };
+                    // battle_frenzy: Launch stacks when hit
+                    if (updated.passive?.id === 'battle_frenzy' && actualDamage > 0)
+                        updated = { ...updated, passiveStacks: Math.min((updated.passiveStacks ?? 0) + 1, 3) };
+                    return updated;
                 });
+                // battle_pose: clear stack after attack
+                if (playerAttacker.passive?.id === 'battle_pose' && (playerAttacker.passiveStacks ?? 0) > 0)
+                    newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], passiveStacks: 0 };
                 logDetail += ` Deals ${totalDeals} total damage to all opponents!`;
             } else if (effect === 'heal') {
                 const healAmt = Math.max(1, Math.floor(newPlayerRoster[state.playerActiveIndex].maxHp * 0.25));
@@ -494,47 +658,124 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
                 };
                 logDetail += ` ${newPlayerRoster[state.playerActiveIndex].name} gains a damage boost.`;
             } else if (effect === 'energy') {
-                pe = { ...pe, universal: (pe.universal || 0) + 2 };
+                pe = capEnergy({ ...pe, universal: (pe.universal || 0) + 2 });
                 logDetail += ` Grants energy boost.`;
             } else if (effect === 'drain') {
-                const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], newOppChar, damage, 'none');
+                const drainAttacker = newPlayerRoster[state.playerActiveIndex];
+                let actualDamage = computeDamage(drainAttacker, newOppChar, damage, 'none');
+                // monster_transform: Zarbon drain +25%
+                if (drainAttacker.passive?.id === 'monster_transform') actualDamage = Math.floor(actualDamage * 1.25);
+                // fathers_prophecy: Bardock opponent survives lethal hit at 1 HP (once)
+                if (newOppChar.passive?.id === 'fathers_prophecy' && (newOppChar.passiveStacks ?? 0) === 0 && newOppChar.currentHp - actualDamage <= 0 && newOppChar.currentHp > 1) {
+                    actualDamage = newOppChar.currentHp - 1;
+                    newOppChar = { ...newOppChar, passiveStacks: 1 };
+                    logDetail += ` ${newOppChar.name}'s vision saves him!`;
+                }
                 newOppChar.currentHp = Math.max(0, newOppChar.currentHp - actualDamage);
                 const heal = Math.floor(actualDamage * 0.5);
                 newPlayerRoster[state.playerActiveIndex] = {
                     ...newPlayerRoster[state.playerActiveIndex],
-                    currentHp: Math.min(
-                        newPlayerRoster[state.playerActiveIndex].maxHp,
-                        newPlayerRoster[state.playerActiveIndex].currentHp + heal,
-                    ),
+                    currentHp: Math.min(newPlayerRoster[state.playerActiveIndex].maxHp, drainAttacker.currentHp + heal),
                 };
+                // battle_pose: clear stack after attack
+                if (drainAttacker.passive?.id === 'battle_pose' && (drainAttacker.passiveStacks ?? 0) > 0)
+                    newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], passiveStacks: 0 };
                 logDetail += ` Deals ${actualDamage} damage and drains ${heal} HP.`;
             } else {
-                const actualDamage = computeDamage(newPlayerRoster[state.playerActiveIndex], newOppChar, damage, effect);
+                const attacker = newPlayerRoster[state.playerActiveIndex];
+                const koCount = newPlayerRoster.filter((c, idx) => idx !== state.playerActiveIndex && c.currentHp <= 0).length;
+                const defenderAliveAllies = newOppRoster.filter((c, idx) => idx !== state.opponentActiveIndex && c.currentHp > 0).length;
+                const attackerAliveAllies = newPlayerRoster.filter((c, idx) => idx !== state.playerActiveIndex && c.currentHp > 0).length;
+                let actualDamage = computeDamage(attacker, newOppChar, damage, effect, {
+                    attackerAllyKOs: koCount,
+                    defenderAliveAllies,
+                    attackerAliveAllies,
+                });
+                // fathers_prophecy: Bardock opponent survives lethal hit at 1 HP (once)
+                if (newOppChar.passive?.id === 'fathers_prophecy' && (newOppChar.passiveStacks ?? 0) === 0 && newOppChar.currentHp - actualDamage <= 0 && newOppChar.currentHp > 1) {
+                    actualDamage = newOppChar.currentHp - 1;
+                    newOppChar = { ...newOppChar, passiveStacks: 1 };
+                    logDetail += ` ${newOppChar.name}'s vision saves him!`;
+                }
                 newOppChar.currentHp = Math.max(0, newOppChar.currentHp - actualDamage);
                 logDetail += ` Deals ${actualDamage} damage!`;
 
-                if (['weaken', 'stun', 'poison', 'bleed', 'regen', 'buff'].includes(effect)) {
-                    newOppChar.statusEffects = [...newOppChar.statusEffects, { effect, duration: effectDuration }];
-                    logDetail += effect === 'stun'   ? ` ${newOppChar.name} is STUNNED for ${effectDuration} turn(s)!`
-                        : effect === 'weaken'        ? ` ${newOppChar.name} is WEAKENED for ${effectDuration} turn(s)!`
-                        : effect === 'poison'        ? ` ${newOppChar.name} is POISONED for ${effectDuration} turn(s)!`
-                        : effect === 'bleed'         ? ` ${newOppChar.name} is BLEEDING for ${effectDuration} turn(s)!`
-                        : effect === 'buff'          ? ` ${newOppChar.name} is BUFFED!`
-                        : ` ${newOppChar.name} will regenerate HP.`;
+                // legendary_power: Broly rage stacks
+                if (newOppChar.passive?.id === 'legendary_power' && actualDamage > 0)
+                    newOppChar = { ...newOppChar, passiveStacks: Math.min((newOppChar.passiveStacks ?? 0) + 1, 3) };
+                // perfect_adaptation: Cell DEF stacks
+                if (newOppChar.passive?.id === 'perfect_adaptation' && actualDamage > 0)
+                    newOppChar = { ...newOppChar, passiveStacks: Math.min((newOppChar.passiveStacks ?? 0) + 1, 3) };
+                // battle_frenzy: Launch stacks when hit
+                if (newOppChar.passive?.id === 'battle_frenzy' && actualDamage > 0)
+                    newOppChar = { ...newOppChar, passiveStacks: Math.min((newOppChar.passiveStacks ?? 0) + 1, 3) };
+                // battle_pose: clear stack after attack
+                if (attacker.passive?.id === 'battle_pose' && (attacker.passiveStacks ?? 0) > 0)
+                    newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], passiveStacks: 0 };
+                // first_strike: mark as used after technique
+                if (attacker.passive?.id === 'first_strike' && (attacker.passiveStacks ?? 0) === 0)
+                    newPlayerRoster[state.playerActiveIndex] = { ...newPlayerRoster[state.playerActiveIndex], passiveStacks: 1 };
+
+                // BUG 11 FIX: buff and regen are self-targeted
+                if (['buff', 'regen'].includes(effect)) {
+                    newPlayerRoster[state.playerActiveIndex] = {
+                        ...newPlayerRoster[state.playerActiveIndex],
+                        statusEffects: [
+                            ...newPlayerRoster[state.playerActiveIndex].statusEffects,
+                            { effect, duration: effectDuration },
+                        ],
+                    };
+                    logDetail += effect === 'buff'
+                        ? ` ${newPlayerRoster[state.playerActiveIndex].name} is BUFFED!`
+                        : ` ${newPlayerRoster[state.playerActiveIndex].name} will regenerate HP.`;
+                } else if (['weaken', 'poison', 'bleed'].includes(effect)) {
+                    // mental_fortress: Guldo immune to weaken; iron_will: Android 16 immune to bleed/poison; water_discipline: Nam immune to bleed
+                    if (effect === 'weaken' && newOppChar.passive?.id === 'mental_fortress') {
+                        logDetail += ` ${newOppChar.name} resists the weaken!`;
+                    } else if (['bleed', 'poison'].includes(effect) && newOppChar.passive?.id === 'iron_will') {
+                        logDetail += ` ${newOppChar.name} resists the ${effect}!`;
+                    } else if (effect === 'bleed' && newOppChar.passive?.id === 'water_discipline') {
+                        logDetail += ` ${newOppChar.name} resists the bleed!`;
+                    } else {
+                        // putrid_aura: Bacterian bleed effects last +1 extra turn
+                        const bleedDur = (effect === 'bleed' && activeChar.passive?.id === 'putrid_aura') ? effectDuration + 1 : effectDuration;
+                        newOppChar.statusEffects = [...newOppChar.statusEffects, { effect, duration: bleedDur }];
+                        logDetail += effect === 'weaken' ? ` ${newOppChar.name} is WEAKENED for ${effectDuration} turn(s)!`
+                            : effect === 'poison' ? ` ${newOppChar.name} is POISONED for ${effectDuration} turn(s)!`
+                            : ` ${newOppChar.name} is BLEEDING for ${bleedDur} turn(s)!`;
+                    }
+                } else if (effect === 'stun') {
+                    // potara_mastery: Vegito immune to stun; immortal_body: Frieza immune to stun
+                    if (newOppChar.passive?.id === 'potara_mastery' || newOppChar.passive?.id === 'immortal_body') {
+                        logDetail += ` ${newOppChar.name} resists the stun!`;
+                    } else {
+                        // demon_curse / psychic_dominance: stun lasts +1 extra turn
+                        const stunDur = (activeChar.passive?.id === 'demon_curse' || activeChar.passive?.id === 'psychic_dominance') ? effectDuration + 1 : effectDuration;
+                        newOppChar.statusEffects = [...newOppChar.statusEffects, { effect: 'stun', duration: stunDur }];
+                        logDetail += ` ${newOppChar.name} is STUNNED for ${stunDur} turn(s)!`;
+                    }
                 }
             }
 
-            newOppRoster[state.opponentActiveIndex] = newOppChar;
+            // AOE already updated newOppRoster via .map(); sync newOppChar so the win-check below sees correct HP
+            if (effect !== 'aoe') {
+                newOppRoster[state.opponentActiveIndex] = newOppChar;
+            } else {
+                newOppChar = { ...newOppRoster[state.opponentActiveIndex] };
+            }
 
         } else if (actionType === 'dodge') {
-            // Apply dodging status to this character for the opponent's next attack
-            newPlayerRoster[state.playerActiveIndex] = {
+            let dodgingChar = {
                 ...newPlayerRoster[state.playerActiveIndex],
                 statusEffects: [
                     ...newPlayerRoster[state.playerActiveIndex].statusEffects,
-                    { effect: 'dodging', duration: 1 },
+                    { effect: 'dodging' as EffectType, duration: 1 },
                 ],
             };
+            // battle_pose: Recoome gains ATK boost after dodging
+            if (activeChar.passive?.id === 'battle_pose')
+                dodgingChar = { ...dodgingChar, passiveStacks: 1 };
+            newPlayerRoster[state.playerActiveIndex] = dodgingChar;
             logDetail += ` ${activeChar.name} prepares to dodge (${Math.round(activeChar.dodge.successRate * 100)}% chance).`;
         }
 
@@ -562,7 +803,8 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             const nextOppIndex = newOppRoster.findIndex(c => c.currentHp > 0);
             if (nextOppIndex === -1) {
                 const pts = calculateBattlePoints(newPlayerRoster, newOppRoster, 'player');
-                set({ winner: 'player', phase: 'gameOver', lastBattlePoints: pts }); // FIX #2
+                set({ winner: 'player', lastBattlePoints: pts }); // FIX #2
+                get().setPhase('gameOver');
                 get().addScore(pts);
                 return;
             } else {
@@ -644,48 +886,165 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
 
             actionName = action.name;
 
-            // Check player dodge
-            if (isDodging(updatedPlayerChar) && Math.random() < updatedPlayerChar.dodge.successRate) {
-                logDetail = `${botChar.name} used ${actionName} but ${updatedPlayerChar.name} dodged it!`;
-                updatedPlayerChar = {
-                    ...updatedPlayerChar,
-                    statusEffects: updatedPlayerChar.statusEffects.filter(e => e.effect !== 'dodging'),
+            // Self-targeted effects — not affected by player dodge
+            if (action.effect === 'heal') {
+                const healAmt = Math.max(1, Math.floor(botChar.maxHp * 0.25));
+                newOppRoster[state.opponentActiveIndex] = {
+                    ...newOppRoster[state.opponentActiveIndex],
+                    currentHp: Math.min(botChar.maxHp, botChar.currentHp + healAmt),
                 };
+                logDetail = `${botChar.name} used ${actionName}. Heals for ${healAmt} HP!`;
+            } else if (action.effect === 'healAll') {
+                let totalHeal = 0;
+                newOppRoster.forEach((pc, idx) => {
+                    if (pc.currentHp <= 0) return;
+                    const healAmt = Math.max(1, Math.floor(pc.maxHp * 0.20));
+                    totalHeal += healAmt;
+                    newOppRoster[idx] = { ...pc, currentHp: Math.min(pc.maxHp, pc.currentHp + healAmt) };
+                });
+                logDetail = `${botChar.name} used ${actionName}. Heals all allies for ${totalHeal} total HP!`;
+            } else if (action.effect === 'clear') {
+                const before = newOppRoster[state.opponentActiveIndex].statusEffects.length;
+                newOppRoster[state.opponentActiveIndex] = {
+                    ...newOppRoster[state.opponentActiveIndex],
+                    statusEffects: newOppRoster[state.opponentActiveIndex].statusEffects.filter(
+                        se => !['poison', 'bleed', 'weaken', 'stun'].includes(se.effect),
+                    ),
+                };
+                const cleared = before - newOppRoster[state.opponentActiveIndex].statusEffects.length;
+                logDetail = cleared > 0
+                    ? `${botChar.name} used ${actionName}. Cleared ${cleared} negative effect(s)!`
+                    : `${botChar.name} used ${actionName}. Nothing to clear.`;
+            } else if (action.effect === 'energy') {
+                oe = capEnergy({ ...oe, universal: (oe.universal || 0) + 2 });
+                logDetail = `${botChar.name} used ${actionName}. Gained energy boost!`;
+            } else if (action.effect === 'senzu') {
+                const dur = action.effectDuration ?? 1;
+                newOppRoster[state.opponentActiveIndex] = {
+                    ...newOppRoster[state.opponentActiveIndex],
+                    statusEffects: [
+                        ...newOppRoster[state.opponentActiveIndex].statusEffects,
+                        { effect: 'senzu' as EffectType, duration: dur },
+                    ],
+                };
+                logDetail = `${botChar.name} used ${actionName}. Gains a damage boost for ${dur} turn(s)!`;
             } else {
-                if (action.effect === 'heal') {
-                    const healAmt = Math.max(1, Math.floor(botChar.maxHp * 0.25));
-                    newOppRoster[state.opponentActiveIndex] = {
-                        ...newOppRoster[state.opponentActiveIndex],
-                        currentHp: Math.min(botChar.maxHp, botChar.currentHp + healAmt),
+                // Opponent-targeted effects — check player dodge first
+                // saiyan_instinct & speed_demon: +20% dodge success rate
+                const baseRate = updatedPlayerChar.dodge.successRate;
+                const effectiveDodgeRate = (updatedPlayerChar.passive?.id === 'saiyan_instinct' || updatedPlayerChar.passive?.id === 'speed_demon')
+                    ? Math.min(1, baseRate + 0.2)
+                    : baseRate;
+                if (isDodging(updatedPlayerChar) && Math.random() < effectiveDodgeRate) {
+                    logDetail = `${botChar.name} used ${actionName} but ${updatedPlayerChar.name} dodged it!`;
+                    updatedPlayerChar = {
+                        ...updatedPlayerChar,
+                        statusEffects: updatedPlayerChar.statusEffects.filter(e => e.effect !== 'dodging'),
                     };
-                    logDetail = `${botChar.name} used ${actionName}. Heals for ${healAmt} HP!`;
                 } else if (action.effect === 'drain') {
-                    const actualDamage = computeDamage(botChar, updatedPlayerChar, action.damage, 'none');
-                    updatedPlayerChar.currentHp = Math.max(0, updatedPlayerChar.currentHp - actualDamage);
+                    const botCurrent = newOppRoster[state.opponentActiveIndex];
+                    let actualDamage = computeDamage(botCurrent, updatedPlayerChar, action.damage, 'none');
+                    // monster_transform: Zarbon drain +25%
+                    if (botCurrent.passive?.id === 'monster_transform') actualDamage = Math.floor(actualDamage * 1.25);
+                    // fathers_prophecy: player's Bardock survives lethal drain (once)
+                    if (updatedPlayerChar.passive?.id === 'fathers_prophecy' && (updatedPlayerChar.passiveStacks ?? 0) === 0 && updatedPlayerChar.currentHp - actualDamage <= 0 && updatedPlayerChar.currentHp > 1) {
+                        actualDamage = updatedPlayerChar.currentHp - 1;
+                        updatedPlayerChar = { ...updatedPlayerChar, passiveStacks: 1 };
+                        logDetail = `${botChar.name} used ${actionName}. ${updatedPlayerChar.name}'s vision saves him!`;
+                    }
+                    updatedPlayerChar = { ...updatedPlayerChar, currentHp: Math.max(0, updatedPlayerChar.currentHp - actualDamage) };
                     const heal = Math.floor(actualDamage * 0.5);
-                    newOppRoster[state.opponentActiveIndex] = {
-                        ...newOppRoster[state.opponentActiveIndex],
-                        currentHp: Math.min(botChar.maxHp, botChar.currentHp + heal),
-                    };
+                    newOppRoster[state.opponentActiveIndex] = { ...botCurrent, currentHp: Math.min(botCurrent.maxHp, botCurrent.currentHp + heal) };
                     logDetail = `${botChar.name} used ${actionName}. Deals ${actualDamage} damage and drains ${heal} HP!`;
+                } else if (action.effect === 'aoe') {
+                    let totalDeals = 0;
+                    const botAttacker = newOppRoster[state.opponentActiveIndex];
+                    const botAliveAllies = newOppRoster.filter((c, idx) => idx !== state.opponentActiveIndex && c.currentHp > 0).length;
+                    newPlayerRoster.forEach((tar, idx) => {
+                        if (tar.currentHp <= 0) return;
+                        let actualDamage = computeDamage(botAttacker, tar, action.damage, 'none', { attackerAliveAllies: botAliveAllies });
+                        // ghost_army: Gotenks AOE +20%
+                        if (botAttacker.passive?.id === 'ghost_army') actualDamage = Math.floor(actualDamage * 1.20);
+                        totalDeals += actualDamage;
+                        let updated = { ...tar, currentHp: Math.max(0, tar.currentHp - actualDamage) };
+                        // perfect_adaptation: Cell DEF stacks
+                        if (updated.passive?.id === 'perfect_adaptation' && actualDamage > 0)
+                            updated = { ...updated, passiveStacks: Math.min((updated.passiveStacks ?? 0) + 1, 3) };
+                        // battle_frenzy: Launch stacks when hit
+                        if (updated.passive?.id === 'battle_frenzy' && actualDamage > 0)
+                            updated = { ...updated, passiveStacks: Math.min((updated.passiveStacks ?? 0) + 1, 3) };
+                        newPlayerRoster[idx] = updated;
+                    });
+                    updatedPlayerChar = newPlayerRoster[state.playerActiveIndex];
+                    logDetail = `${botChar.name} used ${actionName}. Deals ${totalDeals} total damage to all opponents!`;
                 } else {
-                    const actualDamage = computeDamage(botChar, updatedPlayerChar, action.damage, action.effect);
-                    updatedPlayerChar.currentHp = Math.max(0, updatedPlayerChar.currentHp - actualDamage);
+                    const botCurrent = newOppRoster[state.opponentActiveIndex];
+                    const botAllyKOs = newOppRoster.filter((c, idx) => idx !== state.opponentActiveIndex && c.currentHp <= 0).length;
+                    const botAliveAllies = newOppRoster.filter((c, idx) => idx !== state.opponentActiveIndex && c.currentHp > 0).length;
+                    const playerAliveAllies = newPlayerRoster.filter((c, idx) => idx !== state.playerActiveIndex && c.currentHp > 0).length;
+                    let actualDamage = computeDamage(
+                        botCurrent, updatedPlayerChar, action.damage, action.effect,
+                        { attackerAllyKOs: botAllyKOs, defenderAliveAllies: playerAliveAllies, attackerAliveAllies: botAliveAllies },
+                    );
+                    // fathers_prophecy: player's Bardock survives lethal hit (once)
+                    if (updatedPlayerChar.passive?.id === 'fathers_prophecy' && (updatedPlayerChar.passiveStacks ?? 0) === 0 && updatedPlayerChar.currentHp - actualDamage <= 0 && updatedPlayerChar.currentHp > 1) {
+                        actualDamage = updatedPlayerChar.currentHp - 1;
+                        updatedPlayerChar = { ...updatedPlayerChar, passiveStacks: 1 };
+                        logDetail = `${botChar.name} used ${actionName}. ${updatedPlayerChar.name}'s vision saves him!`;
+                    }
+                    updatedPlayerChar = { ...updatedPlayerChar, currentHp: Math.max(0, updatedPlayerChar.currentHp - actualDamage) };
                     logDetail = `${botChar.name} used ${actionName}. Deals ${actualDamage} damage!`;
 
-                    if (['stun', 'weaken', 'poison', 'bleed', 'regen', 'senzu', 'buff'].includes(action.effect)) {
-                        const dur = action.effectDuration ?? 1;
-                        updatedPlayerChar.statusEffects = [
-                            ...updatedPlayerChar.statusEffects,
-                            { effect: action.effect as EffectType, duration: dur },
-                        ];
-                        logDetail += action.effect === 'stun'   ? ` ${updatedPlayerChar.name} is STUNNED for ${dur} turn(s)!`
-                            : action.effect === 'weaken'        ? ` ${updatedPlayerChar.name} is WEAKENED!`
-                            : action.effect === 'poison'        ? ` ${updatedPlayerChar.name} is POISONED!`
-                            : action.effect === 'bleed'         ? ` ${updatedPlayerChar.name} is BLEEDING!`
-                            : action.effect === 'regen'         ? ` ${updatedPlayerChar.name} will regenerate HP.`
-                            : action.effect === 'buff'          ? ` ${updatedPlayerChar.name} is BUFFED!`
-                            : ` ${updatedPlayerChar.name} affected.`;
+                    // legendary_power: Broly rage stacks
+                    if (updatedPlayerChar.passive?.id === 'legendary_power' && actualDamage > 0)
+                        updatedPlayerChar = { ...updatedPlayerChar, passiveStacks: Math.min((updatedPlayerChar.passiveStacks ?? 0) + 1, 3) };
+                    // perfect_adaptation: Cell DEF stacks
+                    if (updatedPlayerChar.passive?.id === 'perfect_adaptation' && actualDamage > 0)
+                        updatedPlayerChar = { ...updatedPlayerChar, passiveStacks: Math.min((updatedPlayerChar.passiveStacks ?? 0) + 1, 3) };
+                    // battle_frenzy: Launch stacks when hit
+                    if (updatedPlayerChar.passive?.id === 'battle_frenzy' && actualDamage > 0)
+                        updatedPlayerChar = { ...updatedPlayerChar, passiveStacks: Math.min((updatedPlayerChar.passiveStacks ?? 0) + 1, 3) };
+                    // first_strike: mark bot's Tao as used after technique
+                    if (botCurrent.passive?.id === 'first_strike' && (botCurrent.passiveStacks ?? 0) === 0)
+                        newOppRoster[state.opponentActiveIndex] = { ...newOppRoster[state.opponentActiveIndex], passiveStacks: 1 };
+
+                    const dur = action.effectDuration ?? 1;
+                    // BUG 11 FIX: buff and regen are self-targeted
+                    if (['buff', 'regen'].includes(action.effect)) {
+                        newOppRoster[state.opponentActiveIndex] = {
+                            ...newOppRoster[state.opponentActiveIndex],
+                            statusEffects: [
+                                ...newOppRoster[state.opponentActiveIndex].statusEffects,
+                                { effect: action.effect as EffectType, duration: dur },
+                            ],
+                        };
+                        logDetail += action.effect === 'buff' ? ` ${botChar.name} is BUFFED!` : ` ${botChar.name} will regenerate HP.`;
+                    } else if (['weaken', 'poison', 'bleed'].includes(action.effect)) {
+                        // mental_fortress: Guldo immune to weaken; iron_will: Android 16 immune to bleed/poison; water_discipline: Nam immune to bleed
+                        if (action.effect === 'weaken' && updatedPlayerChar.passive?.id === 'mental_fortress') {
+                            logDetail += ` ${updatedPlayerChar.name} resists the weaken!`;
+                        } else if (['bleed', 'poison'].includes(action.effect) && updatedPlayerChar.passive?.id === 'iron_will') {
+                            logDetail += ` ${updatedPlayerChar.name} resists the ${action.effect}!`;
+                        } else if (action.effect === 'bleed' && updatedPlayerChar.passive?.id === 'water_discipline') {
+                            logDetail += ` ${updatedPlayerChar.name} resists the bleed!`;
+                        } else {
+                            // putrid_aura: Bacterian bleed effects last +1 extra turn
+                            const bleedDur = (action.effect === 'bleed' && botCurrent.passive?.id === 'putrid_aura') ? dur + 1 : dur;
+                            updatedPlayerChar = { ...updatedPlayerChar, statusEffects: [...updatedPlayerChar.statusEffects, { effect: action.effect as EffectType, duration: bleedDur }] };
+                            logDetail += action.effect === 'weaken' ? ` ${updatedPlayerChar.name} is WEAKENED!`
+                                : action.effect === 'poison' ? ` ${updatedPlayerChar.name} is POISONED!`
+                                : ` ${updatedPlayerChar.name} is BLEEDING!`;
+                        }
+                    } else if (action.effect === 'stun') {
+                        // potara_mastery & immortal_body: immune to stun
+                        if (updatedPlayerChar.passive?.id === 'potara_mastery' || updatedPlayerChar.passive?.id === 'immortal_body') {
+                            logDetail += ` ${updatedPlayerChar.name} resists the stun!`;
+                        } else {
+                            // demon_curse / psychic_dominance: stun lasts +1 extra turn
+                            const stunDur = (botCurrent.passive?.id === 'demon_curse' || botCurrent.passive?.id === 'psychic_dominance') ? dur + 1 : dur;
+                            updatedPlayerChar = { ...updatedPlayerChar, statusEffects: [...updatedPlayerChar.statusEffects, { effect: 'stun', duration: stunDur }] };
+                            logDetail += ` ${updatedPlayerChar.name} is STUNNED for ${stunDur} turn(s)!`;
+                        }
                     }
                 }
             }
@@ -715,7 +1074,8 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             const nextPlayerIndex = newPlayerRoster.findIndex(c => c.currentHp > 0);
             if (nextPlayerIndex === -1) {
                 const pts = calculateBattlePoints(newPlayerRoster, state.opponentRoster, 'opponent');
-                set({ winner: 'opponent', phase: 'gameOver', lastBattlePoints: pts }); // FIX #2
+                set({ winner: 'opponent', lastBattlePoints: pts }); // FIX #2
+                get().setPhase('gameOver');
                 get().addScore(pts);
                 return;
             } else {
@@ -754,16 +1114,102 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         const pts = calculateBattlePoints(s.playerRoster, s.opponentRoster, 'opponent');
         set({
             winner: 'opponent',
-            phase: 'gameOver',
             combatLogs: [log, ...s.combatLogs],
-            lastBattlePoints: pts, // FIX #2
+            lastBattlePoints: pts,
         });
+        get().setPhase('gameOver');
+        get().addScore(pts);
+    },
+
+    winByOpponentDisconnect: () => {
+        const s = get();
+        if (s.phase !== 'battle' || s.winner) return;
+
+        const log: CombatLogEntry = {
+            id: Date.now(),
+            turn: s.turnNumber,
+            playerName: 'System',
+            characterName: '',
+            action: 'Disconnect',
+            details: 'Opponent disconnected — you win by forfeit!',
+            isOpponent: false,
+        };
+
+        const pts = calculateBattlePoints(s.playerRoster, s.opponentRoster, 'player');
+        set({
+            winner: 'player',
+            combatLogs: [log, ...s.combatLogs],
+            lastBattlePoints: pts,
+        });
+        get().setPhase('gameOver');
         get().addScore(pts);
     },
 
     endTurn: () => {
         const s = get();
         if (s.winner) return;
+
+        // ── Online mode ──────────────────────────────────────────────────────
+        if (s.isOnlineMatch) {
+            if (!s.isPlayerTurn) return; // safety guard
+
+            if (s.myRole === 'player2') {
+                // Player2 is always the second-to-act in a round → run end-of-round effects
+                let pRoster = s.playerRoster.map((c) => decrementCooldowns(decrementEffects(c)));
+                let oRoster = s.opponentRoster.map((c) => decrementCooldowns(decrementEffects(c)));
+
+                const pAlive = pRoster.filter(c => c.currentHp > 0).length;
+                const oAlive = oRoster.filter(c => c.currentHp > 0).length;
+
+                if (oAlive === 0) {
+                    const pts = calculateBattlePoints(pRoster, oRoster, 'player');
+                    set({ playerRoster: pRoster, opponentRoster: oRoster, winner: 'player', lastBattlePoints: pts, isPlayerTurn: false, playerActionsUsed: {} });
+                    get().setPhase('gameOver');
+                    get().addScore(pts);
+                    return;
+                }
+                if (pAlive === 0) {
+                    const pts = calculateBattlePoints(pRoster, oRoster, 'opponent');
+                    set({ playerRoster: pRoster, opponentRoster: oRoster, winner: 'opponent', lastBattlePoints: pts, isPlayerTurn: false, playerActionsUsed: {} });
+                    get().setPhase('gameOver');
+                    get().addScore(pts);
+                    return;
+                }
+
+                let pe = grantEnergy(s.playerEnergy, pAlive);
+                let oe = grantEnergy(s.opponentEnergy, oAlive);
+                pRoster.forEach(c => {
+                    if (c.currentHp <= 0) return;
+                    if (c.passive?.id === 'infinite_energy') pe = capEnergy({ ...pe, universal: (pe.universal || 0) + 1 });
+                    if (c.passive?.id === 'android_link')    pe = capEnergy({ ...pe, physical: (pe.physical || 0) + 1 });
+                });
+                oRoster.forEach(c => {
+                    if (c.currentHp <= 0) return;
+                    if (c.passive?.id === 'infinite_energy') oe = capEnergy({ ...oe, universal: (oe.universal || 0) + 1 });
+                    if (c.passive?.id === 'android_link')    oe = capEnergy({ ...oe, physical: (oe.physical || 0) + 1 });
+                });
+                pRoster = pRoster.map(c => (c.passive?.id === 'low_class_fury' && c.currentHp > 0)
+                    ? { ...c, passiveStacks: Math.min((c.passiveStacks ?? 0) + 1, 5) } : c);
+                oRoster = oRoster.map(c => (c.passive?.id === 'low_class_fury' && c.currentHp > 0)
+                    ? { ...c, passiveStacks: Math.min((c.passiveStacks ?? 0) + 1, 5) } : c);
+                // first_strike: reset usage flag each round
+                pRoster = pRoster.map(c => (c.passive?.id === 'first_strike' && c.currentHp > 0) ? { ...c, passiveStacks: 0 } : c);
+                oRoster = oRoster.map(c => (c.passive?.id === 'first_strike' && c.currentHp > 0) ? { ...c, passiveStacks: 0 } : c);
+
+                set({
+                    playerRoster: pRoster, opponentRoster: oRoster,
+                    playerEnergy: pe, opponentEnergy: oe,
+                    turnNumber: s.turnNumber + 1,
+                    isPlayerTurn: false, // BattleArena posts snapshot; poll brings isPlayerTurn back to true
+                    playerActionsUsed: {},
+                });
+            } else {
+                // Player1 just finished — wait for player2
+                set({ isPlayerTurn: false, playerActionsUsed: {} });
+            }
+            return;
+        }
+        // ── End online mode ──────────────────────────────────────────────────
 
         if (!s.isPlayerTurn) {
             let pRoster = s.playerRoster.map((c) => decrementCooldowns(decrementEffects(c)));
@@ -772,8 +1218,44 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             const pAlive = pRoster.filter(c => c.currentHp > 0).length;
             const oAlive = oRoster.filter(c => c.currentHp > 0).length;
 
-            const pe = grantEnergy(s.playerEnergy, pAlive);
-            const oe = grantEnergy(s.opponentEnergy, oAlive);
+            // Win check after DoT/regen effects — handles poison/bleed kills between turns
+            if (oAlive === 0) {
+                const pts = calculateBattlePoints(pRoster, oRoster, 'player');
+                set({ playerRoster: pRoster, opponentRoster: oRoster, winner: 'player', lastBattlePoints: pts });
+                get().setPhase('gameOver');
+                get().addScore(pts);
+                return;
+            }
+            if (pAlive === 0) {
+                const pts = calculateBattlePoints(pRoster, oRoster, 'opponent');
+                set({ playerRoster: pRoster, opponentRoster: oRoster, winner: 'opponent', lastBattlePoints: pts });
+                get().setPhase('gameOver');
+                get().addScore(pts);
+                return;
+            }
+
+            let pe = grantEnergy(s.playerEnergy, pAlive);
+            let oe = grantEnergy(s.opponentEnergy, oAlive);
+
+            // Passive per-round effects
+            pRoster.forEach(c => {
+                if (c.currentHp <= 0) return;
+                if (c.passive?.id === 'infinite_energy') pe = capEnergy({ ...pe, universal: (pe.universal || 0) + 1 });
+                if (c.passive?.id === 'android_link')    pe = capEnergy({ ...pe, physical: (pe.physical || 0) + 1 });
+            });
+            oRoster.forEach(c => {
+                if (c.currentHp <= 0) return;
+                if (c.passive?.id === 'infinite_energy') oe = capEnergy({ ...oe, universal: (oe.universal || 0) + 1 });
+                if (c.passive?.id === 'android_link')    oe = capEnergy({ ...oe, physical: (oe.physical || 0) + 1 });
+            });
+            // low_class_fury: Raditz gains fury stacks each round (max 5)
+            pRoster = pRoster.map(c => (c.passive?.id === 'low_class_fury' && c.currentHp > 0)
+                ? { ...c, passiveStacks: Math.min((c.passiveStacks ?? 0) + 1, 5) } : c);
+            oRoster = oRoster.map(c => (c.passive?.id === 'low_class_fury' && c.currentHp > 0)
+                ? { ...c, passiveStacks: Math.min((c.passiveStacks ?? 0) + 1, 5) } : c);
+            // first_strike: reset usage flag each round
+            pRoster = pRoster.map(c => (c.passive?.id === 'first_strike' && c.currentHp > 0) ? { ...c, passiveStacks: 0 } : c);
+            oRoster = oRoster.map(c => (c.passive?.id === 'first_strike' && c.currentHp > 0) ? { ...c, passiveStacks: 0 } : c);
 
             set({
                 playerRoster: pRoster,
@@ -787,6 +1269,48 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         } else {
             set({ isPlayerTurn: false });
             setTimeout(() => get().executeOpponentTurn(), 1000);
+        }
+    },
+
+    // ── Online: apply opponent's state snapshot received from server ──────────
+    applyOnlineBattleSnapshot: (snap, myRole) => {
+        const { playerRoster, opponentRoster } = get();
+
+        const mySide  = myRole === 'player1' ? snap.p1 : snap.p2;
+        const opSide  = myRole === 'player1' ? snap.p2 : snap.p1;
+
+        const newPlayerRoster = playerRoster.map((c, i) => {
+            const s = mySide.chars[i];
+            return s ? { ...c, currentHp: s.currentHp, cooldowns: s.cooldowns, statusEffects: s.statusEffects as { effect: EffectType; duration: number }[], passiveStacks: s.passiveStacks } : c;
+        });
+        const newOpponentRoster = opponentRoster.map((c, i) => {
+            const s = opSide.chars[i];
+            return s ? { ...c, currentHp: s.currentHp, cooldowns: s.cooldowns, statusEffects: s.statusEffects as { effect: EffectType; duration: number }[], passiveStacks: s.passiveStacks } : c;
+        });
+
+        const isPlayerTurn = snap.whoseTurn === myRole;
+        let winner: 'player' | 'opponent' | null = null;
+        if (snap.winner === myRole) winner = 'player';
+        else if (snap.winner !== null) winner = 'opponent';
+
+        set({
+            playerRoster: newPlayerRoster,
+            opponentRoster: newOpponentRoster,
+            playerActiveIndex: mySide.activeIndex,
+            opponentActiveIndex: opSide.activeIndex,
+            playerEnergy: mySide.energy,
+            opponentEnergy: opSide.energy,
+            turnNumber: snap.turnNumber,
+            isPlayerTurn,
+            winner,
+            playerActionsUsed: {},
+        });
+
+        if (winner !== null) {
+            const pts = calculateBattlePoints(newPlayerRoster, newOpponentRoster, winner);
+            set({ lastBattlePoints: pts });
+            get().setPhase('gameOver');
+            get().addScore(pts);
         }
     },
 });

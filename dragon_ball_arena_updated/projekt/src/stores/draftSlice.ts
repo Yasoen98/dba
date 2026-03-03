@@ -3,7 +3,7 @@ import type { RootState } from './rootStore';
 import type { Character } from '../types';
 import { DRAFT_TIER_LIMIT, DRAFT_MAX_LEGENDARY } from '../types';
 import { INITIAL_CHARACTERS } from '../data/characters';
-import type { BattleCharacter } from './battleSlice';
+import type { BattleCharacter } from '../types';
 
 export interface DraftSlice {
     playerRoster: BattleCharacter[];
@@ -13,9 +13,11 @@ export interface DraftSlice {
     draftTierUsed: number;      // sum of tiers of player's picked characters
     opponentTierUsed: number;   // sum of tiers of opponent's picked characters
 
+    resetDraft: () => void;
     startDraft: () => void;
     draftCharacter: (characterId: string) => void;
     botDraftPick: () => void;
+    applyOpponentDraftPick: (characterId: string) => void; // online mode: apply opponent's pick
 }
 
 function toBattleCharacter(char: Character): BattleCharacter {
@@ -101,18 +103,32 @@ export const createDraftSlice: StateCreator<RootState, [], [], DraftSlice> = (se
     draftTierUsed: 0,
     opponentTierUsed: 0,
 
-    startDraft: () => {
+    resetDraft: () => {
         set({
-            phase: 'draft',
             playerRoster: [],
             opponentRoster: [],
             availableCharacters: [...INITIAL_CHARACTERS],
             draftTurn: 'player',
             draftTierUsed: 0,
             opponentTierUsed: 0,
-            winner: null,
-            combatLogs: [],
         });
+    },
+
+    startDraft: () => {
+        const isOnline = get().isOnlineMatch;
+        const role = get().myRole;
+        // In online mode, player2 waits for player1 to pick first
+        const initialDraftTurn: 'player' | 'opponent' =
+            isOnline && role === 'player2' ? 'opponent' : 'player';
+        set({
+            playerRoster: [],
+            opponentRoster: [],
+            availableCharacters: [...INITIAL_CHARACTERS],
+            draftTurn: initialDraftTurn,
+            draftTierUsed: 0,
+            opponentTierUsed: 0,
+        });
+        get().setPhase('draft');
     },
 
     draftCharacter: (characterId: string) => {
@@ -143,7 +159,10 @@ export const createDraftSlice: StateCreator<RootState, [], [], DraftSlice> = (se
             get().startBattle();
         } else {
             set({ draftTurn: 'opponent' });
-            setTimeout(() => get().botDraftPick(), 800);
+            // In online mode, skip bot — DraftScreen handles waiting for real opponent's pick
+            if (!get().isOnlineMatch) {
+                setTimeout(() => get().botDraftPick(), 800);
+            }
         }
     },
 
@@ -157,6 +176,27 @@ export const createDraftSlice: StateCreator<RootState, [], [], DraftSlice> = (se
         const newAvailable = availableCharacters.filter(c => c.id !== chosen.id);
         const newRoster = [...opponentRoster, toBattleCharacter(chosen)];
         const newTierUsed = opponentTierUsed + chosen.tier;
+
+        set({ opponentRoster: newRoster, availableCharacters: newAvailable, opponentTierUsed: newTierUsed });
+
+        if (newRoster.length === 3 && playerRoster.length === 3) {
+            get().startBattle();
+        } else {
+            set({ draftTurn: 'player' });
+        }
+    },
+
+    // Online mode: apply the opponent's draft pick (received from json-server)
+    applyOpponentDraftPick: (characterId: string) => {
+        const { phase, availableCharacters, opponentRoster, playerRoster, opponentTierUsed } = get();
+        if (phase !== 'draft' || opponentRoster.length >= 3) return;
+
+        const char = availableCharacters.find(c => c.id === characterId);
+        if (!char) return;
+
+        const newAvailable = availableCharacters.filter(c => c.id !== char.id);
+        const newRoster = [...opponentRoster, toBattleCharacter(char)];
+        const newTierUsed = opponentTierUsed + char.tier;
 
         set({ opponentRoster: newRoster, availableCharacters: newAvailable, opponentTierUsed: newTierUsed });
 

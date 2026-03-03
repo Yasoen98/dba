@@ -4,11 +4,12 @@ import { DraftScreen } from './components/DraftScreen';
 import { BattleArena } from './components/BattleArena';
 import { LoginScreen } from './components/LoginScreen';
 import { GameOverScreen } from './components/GameOverScreen';
+import { RankingScreen } from './components/RankingScreen';
 import { INITIAL_CHARACTERS } from './data/characters'; // FIX #5
 import './index.css';
 
 function App() {
-    const { phase, startMatchmaking, playerName, playerRank, playerScore, logout } = useGameState();
+    const { phase, startMatchmaking, setPhase, playerName, playerRank, playerScore, logout } = useGameState();
 
     return (
         <div className="app-container">
@@ -119,6 +120,14 @@ function App() {
                                     <span>T3 Legendary</span>
                                 </div>
                             </div>
+
+                            <button className="ranking-btn" onClick={() => setPhase('ranking')}>
+                                <span className="ranking-btn-corner tl" />
+                                <span className="ranking-btn-corner tr" />
+                                <span className="ranking-btn-corner bl" />
+                                <span className="ranking-btn-corner br" />
+                                <span className="ranking-btn-text">⬡ RANKING</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -128,6 +137,7 @@ function App() {
             {phase === 'draft' && <DraftScreen />}
             {phase === 'battle' && <BattleArena />}
             {phase === 'gameOver' && <GameOverScreen />}
+            {phase === 'ranking' && <RankingScreen />}
         </div>
     );
 }
