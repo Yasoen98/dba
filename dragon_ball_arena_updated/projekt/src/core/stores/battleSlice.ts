@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { RootState } from './rootStore';
-import type { PlayerEnergy, CombatLogEntry, ActionCost, EffectType, BattleCharacter } from '../types';
-import { ENERGY_TYPE_CAP } from '../types';
+import type { PlayerEnergy, CombatLogEntry, ActionCost, EffectType, BattleCharacter } from "../../core/types";
+import { ENERGY_TYPE_CAP } from "../../core/types";
 
 interface BattleSliceState {
     playerActiveIndex: number;
@@ -27,7 +27,7 @@ export interface BattleSlice extends BattleSliceState {
     endTurn: () => void;
     surrender: () => void;
     winByOpponentDisconnect: () => void;
-    applyOnlineBattleSnapshot: (snap: import('../services/matchService').OnlineBattleSnapshot, myRole: import('../services/matchService').MatchRole) => void;
+    applyOnlineBattleSnapshot: (snap: import("../../multiplayer/matchService").OnlineBattleSnapshot, myRole: import("../../multiplayer/matchService").MatchRole) => void;
 }
 
 const initialEnergy: PlayerEnergy = { ki: 0, physical: 0, special: 0, universal: 0 };
@@ -35,109 +35,70 @@ const initialEnergy: PlayerEnergy = { ki: 0, physical: 0, special: 0, universal:
 // ─── Energy helpers ────────────────────────────────────────────────────────────
 
 function canAffordCost(energy: PlayerEnergy, cost: ActionCost): boolean {
-    const needKi = cost.ki || 0;
-    const needPh = cost.physical || 0;
-    const needSp = cost.special || 0;
-    const needAny = cost.any || 0;
+    let u = energy.universal || 0;
+    let ki = energy.ki;
+    let ph = energy.physical;
+    let sp = energy.special;
 
-    let availKi = energy.ki;
-    let availPh = energy.physical;
-    let availSp = energy.special;
-    let availUniversal = energy.universal || 0;
+    const pay = (needed: number, available: number) => {
+        const fromU = Math.min(u, needed);
+        u -= fromU;
+        needed -= fromU;
+        const fromSpecific = Math.min(available, needed);
+        needed -= fromSpecific;
+        return { needed, remaining: available - fromSpecific };
+    };
 
-    // First, fulfill specific energy requirements using universal as fallback
-    if (availKi < needKi) {
-        const shortfall = needKi - availKi;
-        if (availUniversal < shortfall) return false;
-        availUniversal -= shortfall;
-        availKi = 0;
-    } else {
-        availKi -= needKi;
-    }
-    if (availPh < needPh) {
-        const shortfall = needPh - availPh;
-        if (availUniversal < shortfall) return false;
-        availUniversal -= shortfall;
-        availPh = 0;
-    } else {
-        availPh -= needPh;
-    }
-    if (availSp < needSp) {
-        const shortfall = needSp - availSp;
-        if (availUniversal < shortfall) return false;
-        availUniversal -= shortfall;
-        availSp = 0;
-    } else {
-        availSp -= needSp;
-    }
+    const resKi = pay(cost.ki || 0, ki);
+    if (resKi.needed > 0) return false;
 
-    // For `any` cost, check if we have enough from remaining energies (any type)
-    const availableForAny = availKi + availPh + availSp + availUniversal;
-    if (availableForAny < needAny) return false;
+    const resPh = pay(cost.physical || 0, ph);
+    if (resPh.needed > 0) return false;
+
+    const resSp = pay(cost.special || 0, sp);
+    if (resSp.needed > 0) return false;
+
+    const totalAnyAvailable = u + resKi.remaining + resPh.remaining + resSp.remaining;
+    if (totalAnyAvailable < (cost.any || 0)) return false;
 
     return true;
 }
 
 function deductCost(energy: PlayerEnergy, cost: ActionCost): PlayerEnergy {
-    let ki = energy.ki;
-    let physical = energy.physical;
-    let special = energy.special;
-    let universal = energy.universal || 0;
+    const result = { ...energy };
 
-    const needKi = cost.ki || 0;
-    const needPh = cost.physical || 0;
-    const needSp = cost.special || 0;
-    const needAny = cost.any || 0;
+    const deduct = (needed: number, type: keyof PlayerEnergy) => {
+        const fromU = Math.min(result.universal || 0, needed);
+        result.universal = (result.universal || 0) - fromU;
+        needed -= fromU;
+        if (needed > 0) {
+            result[type] -= needed;
+        }
+    };
 
-    // Deduct specific energies first
-    if (ki < needKi) {
-        universal -= (needKi - ki);
-        ki = 0;
-    } else {
-        ki -= needKi;
-    }
-    if (physical < needPh) {
-        universal -= (needPh - physical);
-        physical = 0;
-    } else {
-        physical -= needPh;
-    }
-    if (special < needSp) {
-        universal -= (needSp - special);
-        special = 0;
-    } else {
-        special -= needSp;
-    }
+    deduct(cost.ki || 0, 'ki');
+    deduct(cost.physical || 0, 'physical');
+    deduct(cost.special || 0, 'special');
 
-    // For `any` cost, use any available energy in order: ki, physical, special, universal
-    let remainingAny = needAny;
-    if (remainingAny > 0 && ki > 0) {
-        const use = Math.min(remainingAny, ki);
-        ki -= use;
-        remainingAny -= use;
-    }
-    if (remainingAny > 0 && physical > 0) {
-        const use = Math.min(remainingAny, physical);
-        physical -= use;
-        remainingAny -= use;
-    }
-    if (remainingAny > 0 && special > 0) {
-        const use = Math.min(remainingAny, special);
-        special -= use;
-        remainingAny -= use;
-    }
-    if (remainingAny > 0) {
-        universal -= remainingAny;
+    let anyAmount = cost.any || 0;
+    // Use Universal first for 'any'
+    const fromU = Math.min(result.universal || 0, anyAmount);
+    result.universal = (result.universal || 0) - fromU;
+    anyAmount -= fromU;
+
+    // Then use specific energies
+    const types: (keyof PlayerEnergy)[] = ['ki', 'physical', 'special'];
+    for (const t of types) {
+        if (anyAmount <= 0) break;
+        const fromType = Math.min(result[t] || 0, anyAmount);
+        result[t] = (result[t] || 0) - fromType;
+        anyAmount -= fromType;
     }
 
-    return { ki, physical, special, universal };
+    return result;
 }
 
 // ─── Damage calculation ────────────────────────────────────────────────────────
-
-function calcDamage(baseDamage: number, attackerAtk: number, defenderDef: number, effect: EffectType): number {
-    return effect === 'pierce' ? baseDamage : Math.floor(baseDamage * (attackerAtk / defenderDef));
-}
 
 function computeDamage(
     attacker: BattleCharacter,
@@ -447,8 +408,25 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
     playerActionsUsed: {},
     lastBattlePoints: 0, // FIX #2: dodane pole
 
-    setPlayerActiveIndex: (index) => set({ playerActiveIndex: index }),
-    setOpponentActiveIndex: (index) => set({ opponentActiveIndex: index }),
+    setPlayerActiveIndex: (index) => {
+        const state = get();
+        if (state.playerRoster[index]?.currentHp > 0) {
+            if (state.isOnlineMatch) {
+                import("../../multiplayer/matchService").then(m => m.selectAction('switchCharacter', index.toString()));
+                // We'll optimistically update locally to make UI snappy
+            }
+            set({ playerActiveIndex: index });
+        }
+    },
+    setOpponentActiveIndex: (index) => {
+        const state = get();
+        if (state.opponentRoster[index]?.currentHp > 0) {
+            if (state.isOnlineMatch) {
+                import("../../multiplayer/matchService").then(m => m.selectAction('changeTarget', index.toString()));
+            }
+            set({ opponentActiveIndex: index });
+        }
+    },
 
     resetBattle: () => {
         set({
@@ -517,6 +495,14 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
     executePlayerAction: (actionType, actionId) => {
         const state = get();
         if (!state.isPlayerTurn || state.phase !== 'battle' || state.winner) return;
+
+        if (state.isOnlineMatch) {
+            import("../../multiplayer/matchService").then(m => {
+                m.selectAction(actionType, actionId);
+            });
+            // Don't execute locally, wait for server's battleUpdate
+            return;
+        }
 
         const activeChar = state.playerRoster[state.playerActiveIndex];
         const oppChar = state.opponentRoster[state.opponentActiveIndex];
@@ -828,6 +814,11 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         const state = get();
         if (!state.isPlayerTurn || state.phase !== 'battle' || state.winner) return;
 
+        if (state.isOnlineMatch) {
+            import("../../multiplayer/matchService").then(m => m.selectAction('pass'));
+            return;
+        }
+
         const updatedActionsUsed = { ...state.playerActionsUsed };
         const newLogs: CombatLogEntry[] = [];
 
@@ -1101,6 +1092,12 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
         const s = get();
         if (s.phase !== 'battle' || s.winner) return;
 
+        if (s.isOnlineMatch) {
+            import("../../multiplayer/matchService").then(m => m.surrenderMatch());
+            // Wait for server to confirm gameOver
+            return;
+        }
+
         const log: CombatLogEntry = {
             id: Date.now(),
             turn: s.turnNumber,
@@ -1274,19 +1271,13 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
 
     // ── Online: apply opponent's state snapshot received from server ──────────
     applyOnlineBattleSnapshot: (snap, myRole) => {
-        const { playerRoster, opponentRoster } = get();
-
         const mySide  = myRole === 'player1' ? snap.p1 : snap.p2;
         const opSide  = myRole === 'player1' ? snap.p2 : snap.p1;
 
-        const newPlayerRoster = playerRoster.map((c, i) => {
-            const s = mySide.chars[i];
-            return s ? { ...c, currentHp: s.currentHp, cooldowns: s.cooldowns, statusEffects: s.statusEffects as { effect: EffectType; duration: number }[], passiveStacks: s.passiveStacks } : c;
-        });
-        const newOpponentRoster = opponentRoster.map((c, i) => {
-            const s = opSide.chars[i];
-            return s ? { ...c, currentHp: s.currentHp, cooldowns: s.cooldowns, statusEffects: s.statusEffects as { effect: EffectType; duration: number }[], passiveStacks: s.passiveStacks } : c;
-        });
+        // Ensure we preserve local Character details (like image, name) if the backend only sends partial or full roster.
+        // Actually the backend sends the FULL BattleCharacter object now.
+        const newPlayerRoster = mySide.roster;
+        const newOpponentRoster = opSide.roster;
 
         const isPlayerTurn = snap.whoseTurn === myRole;
         let winner: 'player' | 'opponent' | null = null;
@@ -1301,9 +1292,10 @@ export const createBattleSlice: StateCreator<RootState, [], [], BattleSlice> = (
             playerEnergy: mySide.energy,
             opponentEnergy: opSide.energy,
             turnNumber: snap.turnNumber,
+            combatLogs: snap.combatLogs,
             isPlayerTurn,
             winner,
-            playerActionsUsed: {},
+            playerActionsUsed: mySide.actionsUsed || {},
         });
 
         if (winner !== null) {

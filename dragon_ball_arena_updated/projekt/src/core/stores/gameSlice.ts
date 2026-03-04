@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { RootState } from './rootStore';
-import type { MatchRole } from '../services/matchService';
+import type { MatchRole } from "../../multiplayer/matchService";
 
 // ─── Łatwa do zmiany stała czasu oczekiwania w matchmakingu ───────────────────
 export const MATCHMAKING_DURATION_SECONDS = 30;
@@ -17,9 +17,10 @@ export interface GameSlice {
     matchId: string | null;
     myRole: MatchRole | null;
     isOnlineMatch: boolean;
+    isRanked: boolean;
 
     setPhase: (phase: GamePhase) => void;
-    startMatchmaking: () => void;
+    startMatchmaking: (ranked?: boolean) => void;
     tickMatchmaking: () => void;        // pure 1-second decrement — component drives transition
     setMatchFound: (opponentName: string) => void;
     setMatchSession: (matchId: string, role: MatchRole) => void;
@@ -40,10 +41,11 @@ export const createGameSlice: StateCreator<RootState, [], [], GameSlice> = (set,
     matchId: null,
     myRole: null,
     isOnlineMatch: false,
+    isRanked: true,
 
     setPhase: (phase) => set({ phase }),
 
-    startMatchmaking: () => {
+    startMatchmaking: (ranked = true) => {
         set({
             phase: 'matchmaking',
             matchmakingTimer: MATCHMAKING_DURATION_SECONDS,
@@ -52,6 +54,7 @@ export const createGameSlice: StateCreator<RootState, [], [], GameSlice> = (set,
             matchId: null,
             myRole: null,
             isOnlineMatch: false,
+            isRanked: ranked,
         });
     },
 
@@ -76,6 +79,9 @@ export const createGameSlice: StateCreator<RootState, [], [], GameSlice> = (set,
     },
 
     resetGame: () => {
+        // Disconnect from multiplayer if active
+        import("../../multiplayer/matchService").then(m => m.disconnectSocket());
+
         // Reset only GameSlice state; draft and battle slices reset themselves
         set({
             phase: 'menu',

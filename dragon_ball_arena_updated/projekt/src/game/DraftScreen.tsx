@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useGameState } from '../stores/rootStore';
-import { type Character, DRAFT_TIER_LIMIT } from '../types';
-import { getMatch, patchMatch } from '../services/matchService';
+import { motion } from 'framer-motion';
+import { useGameState } from "../core/stores/rootStore";
+import { type Character, DRAFT_TIER_LIMIT } from "../core/types";
+import { getSocket, selectCharacter } from "../multiplayer/matchService";
+import { useAudio } from '../audio/AudioContext';
 
 const TIER_LABELS: Record<number, string> = {
     1: 'Common',
@@ -31,43 +33,41 @@ export const DraftScreen: React.FC = () => {
         matchFoundOpponent,
     } = useGameState();
 
+    const { playSound } = useAudio();
+
     const [hoveredChar, setHoveredChar] = useState<Character | null>(null);
     const prevOpponentRosterLen = useRef(0);
 
-    // Post pick to server before calling draftCharacter so the request is in-flight
-    // even when startBattle() fires immediately (which would unmount DraftScreen
-    // before any useEffect could run for the last pick).
     const handlePickCharacter = (charId: string) => {
-        if (isOnlineMatch && matchId && myRole) {
-            const rosterKey = myRole === 'player1' ? 'p1Roster' : 'p2Roster';
-            patchMatch(matchId, { [rosterKey]: [...playerRoster.map(c => c.id), charId] });
+        if (isOnlineMatch) {
+            selectCharacter(charId);
         }
+        playSound('ui_hover');
         draftCharacter(charId);
     };
 
-    // ── Online: poll for opponent's picks when it's their turn ─────────────────
+    // ── Online: listen for opponent's picks ────────────────────────────────────
     useEffect(() => {
-        if (!isOnlineMatch || !matchId || !myRole || draftTurn !== 'opponent') return;
+        if (!isOnlineMatch || !matchId || !myRole) return;
 
-        const poll = setInterval(async () => {
-            const match = await getMatch(matchId);
-            if (!match) return;
-
-            const opRosterKey = myRole === 'player1' ? 'p2Roster' : 'p1Roster';
-            const serverOpRoster: string[] | null = (match as Record<string, unknown>)[opRosterKey] as string[] | null;
-            if (!serverOpRoster) return;
-
-            // Apply any new picks that aren't yet in local opponentRoster
+        const socket = getSocket();
+        
+        const onDraftUpdate = (data: { player1Roster: string[], player2Roster: string[], nextTurn: 'player1' | 'player2' }) => {
+            const opRoster = myRole === 'player1' ? data.player2Roster : data.player1Roster;
+            
             const localLen = prevOpponentRosterLen.current;
-            if (serverOpRoster.length > localLen) {
-                const newPickId = serverOpRoster[localLen];
+            if (opRoster.length > localLen) {
+                const newPickId = opRoster[localLen];
                 prevOpponentRosterLen.current = localLen + 1;
                 applyOpponentDraftPick(newPickId);
             }
-        }, 1500);
+        };
 
-        return () => clearInterval(poll);
-    }, [isOnlineMatch, matchId, myRole, draftTurn, applyOpponentDraftPick]);
+        socket.on('draftUpdate', onDraftUpdate);
+        return () => {
+            socket.off('draftUpdate', onDraftUpdate);
+        };
+    }, [isOnlineMatch, matchId, myRole, applyOpponentDraftPick]);
 
     const remainingBudget = DRAFT_TIER_LIMIT - draftTierUsed;
     const hasLegendary = playerRoster.some(c => c.tier === 3);
@@ -148,7 +148,7 @@ export const DraftScreen: React.FC = () => {
             </div>
             {hasLegendary && draftTurn === 'player' && (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                    You already have a Legendary (Tier 3); another cannot be drafted.
+                    You already have a Legendary (Tier 3); another cannot be drafted.
                 </div>
             )}
 
@@ -259,10 +259,18 @@ export const DraftScreen: React.FC = () => {
                     const disabled = draftTurn !== 'player' || tooExpensive || exceedsLegendary;
 
                     return (
-                        <button
+                        <motion.button
+                            layout
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            whileHover={{ y: -5, boxShadow: `0 10px 20px -10px ${char.imageColor}` }}
+                            whileTap={{ scale: 0.95 }}
                             key={char.id}
                             onClick={() => handlePickCharacter(char.id)}
-                            onMouseEnter={() => setHoveredChar(char)}
+                            onMouseEnter={() => {
+                                setHoveredChar(char);
+                                playSound('ui_hover');
+                            }}
                             onMouseLeave={() => setHoveredChar(null)}
                             disabled={disabled}
                             className="glass-panel"
@@ -335,7 +343,7 @@ export const DraftScreen: React.FC = () => {
                                     Only one Legendary allowed
                                 </div>
                             )}
-                        </button>
+                        </motion.button>
                     );
                 })}
             </div>

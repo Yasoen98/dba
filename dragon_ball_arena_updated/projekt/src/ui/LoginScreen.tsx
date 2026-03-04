@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useGameState } from '../stores/rootStore';
+import { useGameState } from "../core/stores/rootStore";
+import { useAudio } from '../audio/AudioContext';
 
 type Tab = 'login' | 'register' | 'guest';
 
@@ -22,6 +23,7 @@ export const LoginScreen: React.FC = () => {
     const [password, setPassword] = useState('');
 
     const { login, register, loginAsGuest, loginError, loginLoading } = useGameState();
+    const { playSound } = useAudio();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,7 +111,8 @@ export const LoginScreen: React.FC = () => {
                     {tabs.map(t => (
                         <button
                             key={t.id}
-                            onClick={() => { setTab(t.id); }}
+                            onClick={() => { setTab(t.id); playSound('ui_hover'); }}
+                            onMouseEnter={() => playSound('ui_hover')}
                             style={{
                                 flex: 1,
                                 padding: '0.55rem 0',
@@ -189,6 +192,7 @@ export const LoginScreen: React.FC = () => {
                             type="submit"
                             className="btn"
                             disabled={!isFormValid || loginLoading}
+                            onMouseEnter={() => playSound('ui_hover')}
                             style={{
                                 padding: '0.9rem',
                                 fontSize: '0.9rem',
@@ -235,6 +239,7 @@ export const LoginScreen: React.FC = () => {
                         <button
                             className="btn"
                             onClick={loginAsGuest}
+                            onMouseEnter={() => playSound('ui_hover')}
                             style={{
                                 padding: '0.9rem 2rem',
                                 fontSize: '0.9rem',

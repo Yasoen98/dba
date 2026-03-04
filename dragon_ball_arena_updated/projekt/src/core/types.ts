@@ -138,11 +138,10 @@ export interface BattleCharacter extends Character {
 
 // ─── Rank Thresholds ──────────────────────────────────────────────────────────
 export const RANK_THRESHOLDS: { threshold: number; rank: string }[] = [
-    { threshold: 1000, rank: 'Super Saiyan God' },
-    { threshold: 500, rank: 'Super Saiyan' },
-    { threshold: 250, rank: 'Elite Warrior' },
-    { threshold: 100, rank: 'Raditz' },
-    { threshold: 0, rank: 'Saibaman' },
+    { threshold: 2000, rank: 'Diamond' },
+    { threshold: 1500, rank: 'Gold' },
+    { threshold: 1000, rank: 'Silver' },
+    { threshold: 0, rank: 'Bronze' },
 ];
 
 // ─── Combat Log ───────────────────────────────────────────────────────────────

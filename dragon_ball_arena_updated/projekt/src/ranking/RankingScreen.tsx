@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useGameState } from '../stores/rootStore';
-import { getRankForScore } from '../stores/authSlice';
+import { useGameState } from "../core/stores/rootStore";
+import { getRankForScore } from "../core/stores/authSlice";
 
 interface UserRow {
     id: string;
@@ -34,7 +34,7 @@ export const RankingScreen: React.FC = () => {
     const [page, setPage]         = useState(1);
 
     useEffect(() => {
-        fetch('/api/users')
+        fetch('/api/leaderboard')
             .then(r => r.json())
             .then(data => {
                 const list: UserRow[] = (Array.isArray(data) ? data : (data?.data ?? []))
@@ -48,7 +48,6 @@ export const RankingScreen: React.FC = () => {
                         bestStreak: Number(u.bestStreak ?? 0),
                         globalRank: 0, // filled below after sort
                     }))
-                    .sort((a: UserRow, b: UserRow) => b.score - a.score || b.wins - a.wins)
                     .map((r, i) => ({ ...r, globalRank: i })); // stable rank index after sort
                 setRows(list);
                 setLoading(false);

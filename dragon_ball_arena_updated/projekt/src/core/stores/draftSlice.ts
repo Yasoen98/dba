@@ -1,9 +1,9 @@
 import type { StateCreator } from 'zustand';
 import type { RootState } from './rootStore';
-import type { Character } from '../types';
-import { DRAFT_TIER_LIMIT, DRAFT_MAX_LEGENDARY } from '../types';
-import { INITIAL_CHARACTERS } from '../data/characters';
-import type { BattleCharacter } from '../types';
+import type { Character } from "../../core/types";
+import { DRAFT_TIER_LIMIT, DRAFT_MAX_LEGENDARY } from "../../core/types";
+import { INITIAL_CHARACTERS } from "../../core/data/characters";
+import type { BattleCharacter } from "../../core/types";
 
 export interface DraftSlice {
     playerRoster: BattleCharacter[];

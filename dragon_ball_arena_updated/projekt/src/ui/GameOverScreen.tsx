@@ -1,21 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useGameState } from '../stores/rootStore';
-import { getRankForScore } from '../stores/authSlice';
-import { deleteMatch } from '../services/matchService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useGameState } from "../core/stores/rootStore";
+import { getRankForScore } from "../core/stores/authSlice";
+import { deleteMatch } from "../multiplayer/matchService";
+import { useAudio } from '../audio/AudioContext';
 
 export const GameOverScreen: React.FC = () => {
     const { winner, playerRoster, opponentRoster, turnNumber, playerScore, resetGame, lastBattlePoints, isGuest, isOnlineMatch, matchId } = useGameState();
+    const { playSound } = useAudio();
 
     const isVictory = winner === 'player';
     const matchDeletedRef = useRef(false);
 
+    useEffect(() => {
+        if (isVictory) playSound('win');
+    }, [isVictory, playSound]);
+
     // ── Delete match from DB when game ends (online only, only once) ──────────
-    // Winner delays deletion so the loser's poll can still read the final snapshot.
-    // The PATCH (final snapshot) and this DELETE race each other — without a delay
-    // the match gets deleted before the loser ever receives the winning snapshot.
-    // Winner delays 10s so the loser can still poll the final snapshot.
-    // Loser delays 3s so the surrender PATCH (from unmount cleanup) can land
-    // before the DELETE races it.
     useEffect(() => {
         if (!isOnlineMatch || !matchId || matchDeletedRef.current) return;
         matchDeletedRef.current = true;
@@ -26,12 +27,10 @@ export const GameOverScreen: React.FC = () => {
 
     // ── Staged animation ─────────────────────────────────────────────────────
     const [showFlash, setShowFlash] = useState(true);
-    const [showContent, setShowContent] = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setShowFlash(false), 500);
-        const t2 = setTimeout(() => setShowContent(true), 300);
-        return () => { clearTimeout(t1); clearTimeout(t2); };
+        return () => clearTimeout(t1);
     }, []);
 
     const flashColor = isVictory ? 'rgba(56,189,248,0.55)' : 'rgba(239,68,68,0.55)';
@@ -39,25 +38,35 @@ export const GameOverScreen: React.FC = () => {
     return (
         <div style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
             {/* Background */}
-            <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: isVictory
-                    ? 'radial-gradient(circle at center, #0c1a2e 0%, #020817 100%)'
-                    : 'radial-gradient(circle at center, #1a0c0c 0%, #020817 100%)',
-                animation: 'gameOverBgIn 0.7s ease both',
-            }} />
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1 }}
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: isVictory
+                        ? 'radial-gradient(circle at center, #0c1a2e 0%, #020817 100%)'
+                        : 'radial-gradient(circle at center, #1a0c0c 0%, #020817 100%)',
+                }} 
+            />
 
             {/* Color flash */}
-            {showFlash && (
-                <div style={{
-                    position: 'fixed', inset: 0,
-                    background: flashColor,
-                    zIndex: 999,
-                    animation: 'gameOverFlash 0.5s ease-out forwards',
-                    pointerEvents: 'none',
-                }} />
-            )}
+            <AnimatePresence>
+                {showFlash && (
+                    <motion.div 
+                        initial={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        style={{
+                            position: 'fixed', inset: 0,
+                            background: flashColor,
+                            zIndex: 999,
+                            pointerEvents: 'none',
+                        }} 
+                    />
+                )}
+            </AnimatePresence>
 
             <div style={{
                 minHeight: '100vh',
@@ -66,31 +75,33 @@ export const GameOverScreen: React.FC = () => {
                 justifyContent: 'center',
                 position: 'relative',
                 zIndex: 1,
-                opacity: showContent ? 1 : 0,
-                transition: 'opacity 0.2s',
             }}>
-                {isVictory
-                    ? <VictoryPanel
-                        playerRoster={playerRoster}
-                        opponentRoster={opponentRoster}
-                        turnNumber={turnNumber}
-                        playerScore={playerScore}
-                        lastBattlePoints={lastBattlePoints}
-                        isGuest={isGuest}
-                        showContent={showContent}
-                        resetGame={resetGame}
-                      />
-                    : <DefeatPanel
-                        playerRoster={playerRoster}
-                        opponentRoster={opponentRoster}
-                        turnNumber={turnNumber}
-                        playerScore={playerScore}
-                        lastBattlePoints={lastBattlePoints}
-                        isGuest={isGuest}
-                        showContent={showContent}
-                        resetGame={resetGame}
-                      />
-                }
+                <motion.div
+                    initial={{ scale: 0.8, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    transition={{ type: 'spring', damping: 15, stiffness: 100, delay: 0.2 }}
+                >
+                    {isVictory
+                        ? <VictoryPanel
+                            playerRoster={playerRoster}
+                            opponentRoster={opponentRoster}
+                            turnNumber={turnNumber}
+                            playerScore={playerScore}
+                            lastBattlePoints={lastBattlePoints}
+                            isGuest={isGuest}
+                            resetGame={resetGame}
+                          />
+                        : <DefeatPanel
+                            playerRoster={playerRoster}
+                            opponentRoster={opponentRoster}
+                            turnNumber={turnNumber}
+                            playerScore={playerScore}
+                            lastBattlePoints={lastBattlePoints}
+                            isGuest={isGuest}
+                            resetGame={resetGame}
+                          />
+                    }
+                </motion.div>
             </div>
         </div>
     );
@@ -105,9 +116,8 @@ const VictoryPanel: React.FC<{
     playerScore: number;
     lastBattlePoints: number;
     isGuest: boolean;
-    showContent: boolean;
     resetGame: () => void;
-}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, showContent, resetGame }) => {
+}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, resetGame }) => {
     const playerSurvivors  = playerRoster.filter(c => c.currentHp > 0).length;
     const opponentSurvivors = opponentRoster.filter(c => c.currentHp > 0).length;
 
@@ -117,20 +127,31 @@ const VictoryPanel: React.FC<{
             maxWidth: '560px',
             width: '90%',
             textAlign: 'center',
-            animation: showContent ? 'gameOverPanelIn 0.7s cubic-bezier(0.22,1,0.36,1) both' : 'none',
         }}>
-            <div style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}>🏆</div>
+            <motion.div 
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', delay: 0.5 }}
+                style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}
+            >
+                🏆
+            </motion.div>
 
-            <h1 style={{
-                fontSize: '3.5rem', fontWeight: 900,
-                color: 'var(--ki-color)',
-                marginBottom: '0.25rem',
-                textShadow: '0 0 30px rgba(56,189,248,0.6)',
-                letterSpacing: '3px',
-                fontFamily: "'Orbitron', sans-serif",
-            }}>
+            <motion.h1 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                style={{
+                    fontSize: '3.5rem', fontWeight: 900,
+                    color: 'var(--ki-color)',
+                    marginBottom: '0.25rem',
+                    textShadow: '0 0 30px rgba(56,189,248,0.6)',
+                    letterSpacing: '3px',
+                    fontFamily: "'Orbitron', sans-serif",
+                }}
+            >
                 VICTORY!
-            </h1>
+            </motion.h1>
 
             <p style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
                 Rozgniotłeś przeciwnika! Twoja moc rośnie!
@@ -138,12 +159,13 @@ const VictoryPanel: React.FC<{
 
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--accent)" />
-                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--ki-color)" />
+                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--accent)" delay={0.9} />
+                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--ki-color)" delay={1.0} />
                 <StatCard
                     label="Punkty"
                     value={lastBattlePoints > 0 ? `+${lastBattlePoints}` : String(lastBattlePoints)}
                     color={lastBattlePoints > 0 ? '#22c55e' : 'var(--text-muted)'}
+                    delay={1.1}
                 />
             </div>
 
@@ -201,9 +223,8 @@ const DefeatPanel: React.FC<{
     playerScore: number;
     lastBattlePoints: number;
     isGuest: boolean;
-    showContent: boolean;
     resetGame: () => void;
-}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, showContent, resetGame }) => {
+}> = ({ playerRoster, opponentRoster, turnNumber, playerScore, lastBattlePoints, isGuest, resetGame }) => {
     const playerSurvivors  = playerRoster.filter(c => c.currentHp > 0).length;
     const opponentSurvivors = opponentRoster.filter(c => c.currentHp > 0).length;
 
@@ -213,21 +234,32 @@ const DefeatPanel: React.FC<{
             maxWidth: '560px',
             width: '90%',
             textAlign: 'center',
-            animation: showContent ? 'gameOverPanelIn 0.7s cubic-bezier(0.22,1,0.36,1) both' : 'none',
             border: '1px solid rgba(239,68,68,0.2)',
         }}>
-            <div style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}>💀</div>
+            <motion.div 
+                initial={{ opacity: 0, scale: 2 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                style={{ fontSize: '5rem', marginBottom: '0.5rem', lineHeight: 1 }}
+            >
+                💀
+            </motion.div>
 
-            <h1 style={{
-                fontSize: '3.5rem', fontWeight: 900,
-                color: 'var(--physical-color)',
-                marginBottom: '0.25rem',
-                textShadow: '0 0 30px rgba(239,68,68,0.6)',
-                letterSpacing: '3px',
-                fontFamily: "'Orbitron', sans-serif",
-            }}>
+            <motion.h1 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                style={{
+                    fontSize: '3.5rem', fontWeight: 900,
+                    color: 'var(--physical-color)',
+                    marginBottom: '0.25rem',
+                    textShadow: '0 0 30px rgba(239,68,68,0.6)',
+                    letterSpacing: '3px',
+                    fontFamily: "'Orbitron', sans-serif",
+                }}
+            >
                 YOU LOSE!
-            </h1>
+            </motion.h1>
 
             <p style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
                 Poniosłeś porażkę. Trenuj ciężej, wojowniku.
@@ -235,12 +267,13 @@ const DefeatPanel: React.FC<{
 
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--physical-color)" />
-                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--physical-color)" />
+                <StatCard label="Rundy"   value={String(turnNumber - 1)} color="var(--physical-color)" delay={1.0} />
+                <StatCard label="Ocalałe" value={`${playerSurvivors} vs ${opponentSurvivors}`} color="var(--physical-color)" delay={1.1} />
                 <StatCard
                     label="Punkty"
                     value={lastBattlePoints > 0 ? `+${lastBattlePoints}` : String(lastBattlePoints)}
                     color={lastBattlePoints >= 0 ? '#f97316' : '#ef4444'}
+                    delay={1.2}
                 />
             </div>
 
@@ -293,14 +326,18 @@ const DefeatPanel: React.FC<{
 
 const ActionButtons: React.FC<{ resetGame: () => void }> = ({ resetGame }) => (
     <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-        <button
+        <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             className="btn"
             style={{ fontSize: '1.05rem', padding: '0.85rem 2rem' }}
             onClick={resetGame}
         >
             Menu Główne
-        </button>
-        <button
+        </motion.button>
+        <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             className="btn"
             style={{
                 fontSize: '1.05rem', padding: '0.85rem 2rem',
@@ -314,27 +351,32 @@ const ActionButtons: React.FC<{ resetGame: () => void }> = ({ resetGame }) => (
             }}
         >
             Zagraj Ponownie
-        </button>
+        </motion.button>
     </div>
 );
 
 // ── Helper sub-components ──────────────────────────────────────────────────────
 
-const StatCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
-    <div style={{
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '10px',
-        padding: '0.6rem 0.5rem',
-    }}>
+const StatCard: React.FC<{ label: string; value: string; color: string; delay?: number }> = ({ label, value, color, delay = 0 }) => (
+    <motion.div 
+        initial={{ y: 10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay }}
+        style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '10px',
+            padding: '0.6rem 0.5rem',
+        }}
+    >
         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>{label}</div>
         <div style={{ fontSize: '1.2rem', fontWeight: 800, color }}>{value}</div>
-    </div>
+    </motion.div>
 );
 
 const RosterSummary: React.FC<{
     label: string;
-    roster: { name: string; currentHp: number; maxHp: number; portraitUrl: string; imageColor: string }[];
+    roster: { name: string; currentHp: number; maxHp: number; portraitUrl?: string; imageColor: string }[];
     isPlayer: boolean;
 }> = ({ label, roster, isPlayer }) => (
     <div style={{ textAlign: 'center' }}>
@@ -349,8 +391,14 @@ const RosterSummary: React.FC<{
             {label}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            {roster.map((c) => (
-                <div key={c.name} style={{ textAlign: 'center' }}>
+            {roster.map((c, i) => (
+                <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 1.3 + i * 0.1 }}
+                    key={c.name} 
+                    style={{ textAlign: 'center' }}
+                >
                     <div style={{
                         width: 44, height: 44, borderRadius: '8px',
                         overflow: 'hidden',
@@ -363,7 +411,7 @@ const RosterSummary: React.FC<{
                     <div style={{ fontSize: '0.6rem', color: c.currentHp > 0 ? '#e2e8f0' : '#555' }}>
                         {c.currentHp > 0 ? `${c.currentHp}/${c.maxHp}` : 'KO'}
                     </div>
-                </div>
+                </motion.div>
             ))}
         </div>
     </div>
